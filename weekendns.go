@@ -2,6 +2,7 @@ package weekendns
 
 import (
 	"encoding/binary"
+	"strings"
 )
 
 type (
@@ -50,4 +51,18 @@ func (q Question) Encode() []byte {
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Type))
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Class))
 	return out
+}
+
+// encodeName encodes a DNS name by splitting it into parts and prefixing each
+// part with its length and appending a nul byte, so "google.com" is encoded as
+// "6 google 3 com 0".
+func encodeName(name string) []byte {
+	parts := strings.Split(name, ".")
+	result := make([]byte, 0, len(name)+len(parts))
+	for _, part := range parts {
+		result = append(result, byte(len(part)))
+		result = append(result, []byte(part)...)
+	}
+	result = append(result, 0x0)
+	return result
 }

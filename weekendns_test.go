@@ -20,6 +20,20 @@ func TestHeaderToBytesExample(t *testing.T) {
 	be.Equal(t, len(got), cap(got))
 }
 
+func TestEncodeDNSNameExample(t *testing.T) {
+	// encode_dns_name("google.com")
+	// b'\x06google\x03com\x00'
+	got := encodeName("google.com")
+	want := []byte{}
+	want = append(want, 0x6)
+	want = append(want, []byte("google")...)
+	want = append(want, 0x3)
+	want = append(want, []byte("com")...)
+	want = append(want, 0x0)
+	compareByteSlices(t, want, got)
+	be.Equal(t, len(got), cap(got))
+}
+
 func compareByteSlices(t *testing.T, want []byte, got []byte) {
 	t.Helper()
 	wantHex := hex.EncodeToString(want)
