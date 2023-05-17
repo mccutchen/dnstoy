@@ -2,6 +2,7 @@ package weekendns
 
 import (
 	"encoding/binary"
+	"io"
 	"math"
 	"math/rand"
 	"strings"
@@ -39,6 +40,22 @@ func (h Header) Encode() []byte {
 	out = binary.BigEndian.AppendUint16(out, h.AuthorityCount)
 	out = binary.BigEndian.AppendUint16(out, h.AdditionalCount)
 	return out
+}
+
+// parseHeader parses a DNS header packet from a reader.
+func parseHeader(r io.Reader) (Header, error) {
+	buf := make([]byte, 12)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return Header{}, err
+	}
+	return Header{
+		ID:              binary.BigEndian.Uint16(buf[:2]),
+		Flags:           binary.BigEndian.Uint16(buf[2:4]),
+		QuestionCount:   binary.BigEndian.Uint16(buf[4:6]),
+		AnswerCount:     binary.BigEndian.Uint16(buf[6:8]),
+		AuthorityCount:  binary.BigEndian.Uint16(buf[8:10]),
+		AdditionalCount: binary.BigEndian.Uint16(buf[10:12]),
+	}, nil
 }
 
 // Question defines a DNS packet question.
