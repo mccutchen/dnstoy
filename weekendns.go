@@ -2,6 +2,8 @@ package weekendns
 
 import (
 	"encoding/binary"
+	"math"
+	"math/rand"
 	"strings"
 )
 
@@ -13,6 +15,8 @@ type (
 const (
 	QueryTypeA   = 1
 	QueryClassIN = 1
+
+	FlagRecursionDesired = 1 << 8
 )
 
 // Header defines a DNS packet header.
@@ -50,6 +54,44 @@ func (q Question) Encode() []byte {
 	out = append(out, q.Name...)
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Type))
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Class))
+	return out
+}
+
+// Query defines a DNS query.
+type Query struct {
+	Header   Header
+	Question Question
+}
+
+// NewQuery creates a new DNS query for the given domain name and record type.
+func NewQuery(domainName string, queryType QueryType) Query {
+	return newQueryHelper(domainName, queryType, uint16(rand.Intn(math.MaxUint16+1)))
+}
+
+// newQueryHelper creates a new DNS query with a given ID, used for
+// deterministic testing of query building.
+func newQueryHelper(domainName string, queryType QueryType, id uint16) Query {
+	return Query{
+		Header: Header{
+			ID:            id,
+			QuestionCount: 1,
+			Flags:         FlagRecursionDesired,
+		},
+		Question: Question{
+			Name:  encodeName(domainName),
+			Type:  queryType,
+			Class: QueryClassIN,
+		},
+	}
+}
+
+// Encode encodes a DNS query as bytes in network order.
+func (q Query) Encode() []byte {
+	headerBytes := q.Header.Encode()
+	questionBytes := q.Question.Encode()
+	out := make([]byte, 0, len(headerBytes)+len(questionBytes))
+	out = append(out, headerBytes...)
+	out = append(out, questionBytes...)
 	return out
 }
 
