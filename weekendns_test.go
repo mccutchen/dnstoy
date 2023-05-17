@@ -51,6 +51,23 @@ func TestParseHeader(t *testing.T) {
 	be.Equal(t, want, got)
 }
 
+func TestParseQuestion(t *testing.T) {
+	resp := strings.NewReader("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+
+	// first, parse and discard the header to get it out of the way
+	_, err := parseHeader(resp)
+	be.NilErr(t, err)
+
+	want := Question{
+		Name:  []byte("www.example.com"),
+		Type:  QueryTypeA,
+		Class: QueryClassIN,
+	}
+	got, err := parseQuestion(resp)
+	be.NilErr(t, err)
+	be.DeepEqual(t, want, got)
+}
+
 func TestDecodeName(t *testing.T) {
 	val := "\x03www\x07example\x03com\x00\x00\x01"
 	got, err := decodeNameSimple(bufio.NewReader(strings.NewReader(val)))

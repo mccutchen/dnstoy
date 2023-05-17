@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 	"math/rand"
@@ -74,6 +75,24 @@ func (q Question) Encode() []byte {
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Type))
 	out = binary.BigEndian.AppendUint16(out, uint16(q.Class))
 	return out
+}
+
+// parseQuestion parses a DNS question packet from a reader.
+func parseQuestion(r io.Reader) (Question, error) {
+	br := bufio.NewReader(r)
+	name, err := decodeNameSimple(br)
+	if err != nil {
+		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
+	}
+	buf := make([]byte, 4)
+	if n, err := io.ReadFull(br, buf); err != nil {
+		return Question{}, fmt.Errorf("parseQuestion: error reading fields: %w (read %d/%d bytes)", err, n, len(buf))
+	}
+	return Question{
+		Name:  name,
+		Type:  QueryType(binary.BigEndian.Uint16(buf[:2])),
+		Class: QueryClass(binary.BigEndian.Uint16(buf[2:4])),
+	}, nil
 }
 
 // Record defines a DNS packet record.
