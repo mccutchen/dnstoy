@@ -57,6 +57,15 @@ func (q Question) Encode() []byte {
 	return out
 }
 
+// Record defines a DNS packet record.
+type Record struct {
+	Name  []byte
+	Type  QueryType
+	Class QueryClass
+	TTL   uint32 // ???
+	Data  []byte
+}
+
 // Query defines a DNS query.
 type Query struct {
 	Header   Header
