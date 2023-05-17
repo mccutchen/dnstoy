@@ -1,6 +1,8 @@
 package weekendns
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/binary"
 	"io"
 	"math"
@@ -133,4 +135,29 @@ func encodeName(name string) []byte {
 	}
 	result = append(result, 0x0)
 	return result
+}
+
+// decodeNameSimple decodes a DNS name. See encodeName for details on the
+// format.
+func decodeNameSimple(br *bufio.Reader) ([]byte, error) {
+	out := &bytes.Buffer{}
+	for i := 0; ; i++ {
+		length, err := br.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if length == 0 {
+			break
+		}
+
+		// only write the "." separator after first iteration
+		if i > 0 {
+			out.Write([]byte("."))
+		}
+
+		if _, err := io.CopyN(out, br, int64(length)); err != nil {
+			return nil, err
+		}
+	}
+	return out.Bytes(), nil
 }

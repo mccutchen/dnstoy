@@ -1,6 +1,7 @@
 package weekendns
 
 import (
+	"bufio"
 	"strings"
 	"testing"
 
@@ -48,4 +49,12 @@ func TestParseHeader(t *testing.T) {
 	got, err := parseHeader(resp)
 	be.NilErr(t, err)
 	be.Equal(t, want, got)
+}
+
+func TestDecodeName(t *testing.T) {
+	val := "\x03www\x07example\x03com\x00\x00\x01"
+	got, err := decodeNameSimple(bufio.NewReader(strings.NewReader(val)))
+	be.NilErr(t, err)
+	want := "www.example.com"
+	be.Equal(t, want, string(got))
 }
