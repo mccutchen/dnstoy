@@ -23,6 +23,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("error reading DNS response: %s", err)
 	}
-	resp := string(buf[:n])
-	log.Printf("Success! Response: %q", resp)
+
+	view := weekendns.NewByteView(buf[:n])
+	header, err := weekendns.ParseHeader(view)
+	if err != nil {
+		log.Fatalf("error parsing header: %s", err)
+	}
+	log.Printf("header:   %#v", header)
+
+	question, err := weekendns.ParseHeader(view)
+	if err != nil {
+		log.Fatalf("error parsing question: %s", err)
+	}
+	log.Printf("question: %#v", question)
+
+	record, err := weekendns.ParseRecord(view)
+	if err != nil {
+		log.Fatalf("error parsing record: %s", err)
+	}
+	log.Printf("record:   %#v", record)
 }

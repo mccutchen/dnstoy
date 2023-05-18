@@ -1,7 +1,6 @@
 package weekendns
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/carlmjohnson/be"
@@ -36,7 +35,7 @@ func TestEncodeQuery(t *testing.T) {
 }
 
 func TestParseHeader(t *testing.T) {
-	resp := strings.NewReader("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 	want := Header{
 		ID:              24662,
 		Flags:           33152,
@@ -45,16 +44,16 @@ func TestParseHeader(t *testing.T) {
 		AuthorityCount:  0,
 		AdditionalCount: 0,
 	}
-	got, err := parseHeader(resp)
+	got, err := ParseHeader(resp)
 	be.NilErr(t, err)
 	be.Equal(t, want, got)
 }
 
 func TestParseQuestion(t *testing.T) {
-	resp := strings.NewReader("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// first, parse and discard the header to get it out of the way
-	_, err := parseHeader(resp)
+	_, err := ParseHeader(resp)
 	be.NilErr(t, err)
 
 	want := Question{
@@ -62,38 +61,34 @@ func TestParseQuestion(t *testing.T) {
 		Type:  QueryTypeA,
 		Class: QueryClassIN,
 	}
-	got, err := parseQuestion(resp)
+	got, err := ParseQuestion(resp)
 	be.NilErr(t, err)
 	be.DeepEqual(t, want, got)
 }
 
 func TestDecodeName(t *testing.T) {
-	val := "\x03www\x07example\x03com\x00\x00\x01"
-	got, err := decodeNameSimple(strings.NewReader(val))
+	val := newByteViewFromString("\x03www\x07example\x03com\x00\x00\x01")
+	got, err := decodeNameSimple(val)
 	be.NilErr(t, err)
 	want := "www.example.com"
 	be.Equal(t, want, string(got))
 }
 
 func TestParseRecord(t *testing.T) {
-	resp := strings.NewReader("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// parse and discard the header and question to get them out of the way
-	{
-		_, err := parseHeader(resp)
-		be.NilErr(t, err)
-	}
-	{
-		_, err := parseQuestion(resp)
-		be.NilErr(t, err)
-	}
+	_, err := ParseHeader(resp)
+	be.NilErr(t, err)
+	_, err = ParseQuestion(resp)
+	be.NilErr(t, err)
 
 	want := Record{
 		Name:  []byte("www.example.com"),
 		Type:  QueryTypeA,
 		Class: QueryClassIN,
 	}
-	got, err := parseRecord(resp)
+	got, err := ParseRecord(resp)
 	be.NilErr(t, err)
 	be.DeepEqual(t, want, got)
 }

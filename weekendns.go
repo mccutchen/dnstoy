@@ -50,19 +50,15 @@ func (h Header) Encode() []byte {
 	return out
 }
 
-// parseHeader parses a DNS header packet from a reader.
-func parseHeader(r Reader) (Header, error) {
-	buf := make([]byte, 12)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return Header{}, err
-	}
+// ParseHeader parses a DNS header packet from a reader.
+func ParseHeader(v *ByteView) (Header, error) {
 	return Header{
-		ID:              binary.BigEndian.Uint16(buf[:2]),
-		Flags:           binary.BigEndian.Uint16(buf[2:4]),
-		QuestionCount:   binary.BigEndian.Uint16(buf[4:6]),
-		AnswerCount:     binary.BigEndian.Uint16(buf[6:8]),
-		AuthorityCount:  binary.BigEndian.Uint16(buf[8:10]),
-		AdditionalCount: binary.BigEndian.Uint16(buf[10:12]),
+		ID:              binary.BigEndian.Uint16(v.Next(2)),
+		Flags:           binary.BigEndian.Uint16(v.Next(2)),
+		QuestionCount:   binary.BigEndian.Uint16(v.Next(2)),
+		AnswerCount:     binary.BigEndian.Uint16(v.Next(2)),
+		AuthorityCount:  binary.BigEndian.Uint16(v.Next(2)),
+		AdditionalCount: binary.BigEndian.Uint16(v.Next(2)),
 	}, nil
 }
 
@@ -82,20 +78,16 @@ func (q Question) Encode() []byte {
 	return out
 }
 
-// parseQuestion parses a DNS question packet from a reader.
-func parseQuestion(r Reader) (Question, error) {
-	name, err := decodeNameSimple(r)
+// ParseQuestion parses a DNS question packet from a reader.
+func ParseQuestion(v *ByteView) (Question, error) {
+	name, err := decodeNameSimple(v)
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
 	}
-	buf := make([]byte, 4)
-	if n, err := io.ReadFull(r, buf); err != nil {
-		return Question{}, fmt.Errorf("parseQuestion: error reading fields: %w (read %d/%d bytes)", err, n, len(buf))
-	}
 	return Question{
 		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(buf[:2])),
-		Class: QueryClass(binary.BigEndian.Uint16(buf[2:4])),
+		Type:  QueryType(binary.BigEndian.Uint16(v.Next(2))),
+		Class: QueryClass(binary.BigEndian.Uint16(v.Next(2))),
 	}, nil
 }
 
@@ -108,33 +100,25 @@ type Record struct {
 	Data  []byte
 }
 
-// parseRecord parses a DNS record packet from a reader.
-func parseRecord(r Reader) (Record, error) {
-	name, err := decodeNameSimple(r)
+// ParseRecord parses a DNS record packet from a reader.
+func ParseRecord(v *ByteView) (Record, error) {
+	name, err := decodeNameSimple(v)
 	if err != nil {
 		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
 	}
 
 	// the type, class, TTL, and data length together are 10 bytes (2 + 2 + 4 + 2 = 10)
 	// so we read 10 bytes
-	buf := make([]byte, 10)
-	if n, err := io.ReadFull(r, buf); err != nil {
-		return Record{}, fmt.Errorf("parseRecord: error reading fields: %w (read %d/%d bytes)", err, n, len(buf))
-	}
-
-	dataLen := binary.BigEndian.Uint16(buf[8:10])
-	data := make([]byte, dataLen)
-	if n, err := io.ReadFull(r, data); err != nil {
-		return Record{}, fmt.Errorf("parseRecord: error reading data: %w (read %d/%d bytes)", err, n, len(data))
-	}
-
-	return Record{
+	record := Record{
 		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(buf[:2])),
-		Class: QueryClass(binary.BigEndian.Uint16(buf[2:4])),
-		TTL:   binary.BigEndian.Uint32(buf[4:8]),
-		Data:  data,
-	}, nil
+		Type:  QueryType(binary.BigEndian.Uint16(v.Next(2))),
+		Class: QueryClass(binary.BigEndian.Uint16(v.Next(2))),
+		TTL:   binary.BigEndian.Uint32(v.Next(4)),
+	}
+
+	dataLen := binary.BigEndian.Uint16(v.Next(2))
+	record.Data = v.Next(dataLen)
+	return record, nil
 }
 
 // Query defines a DNS query.
@@ -191,25 +175,18 @@ func encodeName(name string) []byte {
 
 // decodeNameSimple decodes a DNS name. See encodeName for details on the
 // format.
-func decodeNameSimple(r Reader) ([]byte, error) {
+func decodeNameSimple(v *ByteView) ([]byte, error) {
 	out := &bytes.Buffer{}
 	for i := 0; ; i++ {
-		length, err := r.ReadByte()
-		if err != nil {
-			return nil, err
-		}
+		length := v.NextByte()
 		if length == 0 {
 			break
 		}
-
 		// only write the "." separator after first iteration
 		if i > 0 {
 			out.Write([]byte("."))
 		}
-
-		if _, err := io.CopyN(out, r, int64(length)); err != nil {
-			return nil, err
-		}
+		out.Write(v.Next(uint16(length)))
 	}
 	return out.Bytes(), nil
 }
