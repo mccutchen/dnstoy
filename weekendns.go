@@ -1,7 +1,6 @@
 package weekendns
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -22,6 +21,12 @@ const (
 
 	FlagRecursionDesired = 1 << 8
 )
+
+type Reader interface {
+	io.ByteReader
+	io.Reader
+	io.ReaderAt
+}
 
 // Header defines a DNS packet header.
 type Header struct {
@@ -46,7 +51,7 @@ func (h Header) Encode() []byte {
 }
 
 // parseHeader parses a DNS header packet from a reader.
-func parseHeader(r io.Reader) (Header, error) {
+func parseHeader(r Reader) (Header, error) {
 	buf := make([]byte, 12)
 	if _, err := io.ReadFull(r, buf); err != nil {
 		return Header{}, err
@@ -78,14 +83,13 @@ func (q Question) Encode() []byte {
 }
 
 // parseQuestion parses a DNS question packet from a reader.
-func parseQuestion(r io.Reader) (Question, error) {
-	br := bufio.NewReader(r)
-	name, err := decodeNameSimple(br)
+func parseQuestion(r Reader) (Question, error) {
+	name, err := decodeNameSimple(r)
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
 	}
 	buf := make([]byte, 4)
-	if n, err := io.ReadFull(br, buf); err != nil {
+	if n, err := io.ReadFull(r, buf); err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error reading fields: %w (read %d/%d bytes)", err, n, len(buf))
 	}
 	return Question{
@@ -158,10 +162,10 @@ func encodeName(name string) []byte {
 
 // decodeNameSimple decodes a DNS name. See encodeName for details on the
 // format.
-func decodeNameSimple(br *bufio.Reader) ([]byte, error) {
+func decodeNameSimple(r Reader) ([]byte, error) {
 	out := &bytes.Buffer{}
 	for i := 0; ; i++ {
-		length, err := br.ReadByte()
+		length, err := r.ReadByte()
 		if err != nil {
 			return nil, err
 		}
@@ -174,7 +178,7 @@ func decodeNameSimple(br *bufio.Reader) ([]byte, error) {
 			out.Write([]byte("."))
 		}
 
-		if _, err := io.CopyN(out, br, int64(length)); err != nil {
+		if _, err := io.CopyN(out, r, int64(length)); err != nil {
 			return nil, err
 		}
 	}
