@@ -74,3 +74,26 @@ func TestDecodeName(t *testing.T) {
 	want := "www.example.com"
 	be.Equal(t, want, string(got))
 }
+
+func TestParseRecord(t *testing.T) {
+	resp := strings.NewReader("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+
+	// parse and discard the header and question to get them out of the way
+	{
+		_, err := parseHeader(resp)
+		be.NilErr(t, err)
+	}
+	{
+		_, err := parseQuestion(resp)
+		be.NilErr(t, err)
+	}
+
+	want := Record{
+		Name:  []byte("www.example.com"),
+		Type:  QueryTypeA,
+		Class: QueryClassIN,
+	}
+	got, err := parseRecord(resp)
+	be.NilErr(t, err)
+	be.DeepEqual(t, want, got)
+}

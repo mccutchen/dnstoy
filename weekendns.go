@@ -108,6 +108,35 @@ type Record struct {
 	Data  []byte
 }
 
+// parseRecord parses a DNS record packet from a reader.
+func parseRecord(r Reader) (Record, error) {
+	name, err := decodeNameSimple(r)
+	if err != nil {
+		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
+	}
+
+	// the type, class, TTL, and data length together are 10 bytes (2 + 2 + 4 + 2 = 10)
+	// so we read 10 bytes
+	buf := make([]byte, 10)
+	if n, err := io.ReadFull(r, buf); err != nil {
+		return Record{}, fmt.Errorf("parseRecord: error reading fields: %w (read %d/%d bytes)", err, n, len(buf))
+	}
+
+	dataLen := binary.BigEndian.Uint16(buf[8:10])
+	data := make([]byte, dataLen)
+	if n, err := io.ReadFull(r, data); err != nil {
+		return Record{}, fmt.Errorf("parseRecord: error reading data: %w (read %d/%d bytes)", err, n, len(data))
+	}
+
+	return Record{
+		Name:  name,
+		Type:  QueryType(binary.BigEndian.Uint16(buf[:2])),
+		Class: QueryClass(binary.BigEndian.Uint16(buf[2:4])),
+		TTL:   binary.BigEndian.Uint32(buf[4:8]),
+		Data:  data,
+	}, nil
+}
+
 // Query defines a DNS query.
 type Query struct {
 	Header   Header
