@@ -1,7 +1,7 @@
 package main
 
 import (
-	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -10,12 +10,19 @@ import (
 )
 
 func main() {
+	if len(os.Args) != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s DOMAIN", os.Args[0])
+		os.Exit(1)
+	}
+
+	domainName := os.Args[1]
+
 	conn, err := net.Dial("udp", "8.8.8.8:53")
 	if err != nil {
 		log.Fatalf("error connecting to Google DNS: %s", err)
 	}
 
-	query := weekendns.NewQuery("example.com", weekendns.QueryTypeA)
+	query := weekendns.NewQuery(domainName, weekendns.QueryTypeA)
 	if _, err := conn.Write(query.Encode()); err != nil {
 		log.Fatalf("error writing query: %s", err)
 	}
@@ -31,9 +38,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("error parsing DNS message: %s", err)
 	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(msg); err != nil {
-		log.Fatalf("error encoding DNS message as JSON: %s", err)
-	}
+
+	fmt.Println(weekendns.FormatIP(msg.Answers[0].Data))
 }
