@@ -20,6 +20,9 @@ const (
 	QueryClassIN = 1
 
 	FlagRecursionDesired = 1 << 8
+
+	NameCompressionFlag = 0b1100_0000
+	NameCompressionMask = 0b0011_1111
 )
 
 type Reader interface {
@@ -189,4 +192,37 @@ func decodeNameSimple(v *ByteView) ([]byte, error) {
 		out.Write(v.Next(uint16(length)))
 	}
 	return out.Bytes(), nil
+}
+
+// decodeName decodes a DNS name, optionally handling compression.
+func decodeName(v *ByteView) ([]byte, error) {
+	var parts [][]byte
+	for {
+		length := uint16(v.NextByte())
+		if length == 0 {
+			break
+		}
+
+		// for compressed names, we need to decode the pointer to an earlier
+		// offset in the same message where the name can be found.
+		//
+		// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
+		if length&NameCompressionFlag != 0 {
+			pointerOffset := binary.BigEndian.Uint16([]byte{
+				byte(length & NameCompressionMask),
+				v.NextByte(),
+			})
+			part, err := decodeName(v.FromOffset(pointerOffset))
+			if err != nil {
+				return nil, fmt.Errorf("decodeName: error decoding compressed name at offset %v: %w", pointerOffset, err)
+			}
+			parts = append(parts, part)
+			break
+		}
+
+		// otherwise, we have just grab the next length bytes for this part of
+		// the name.
+		parts = append(parts, v.Next(length))
+	}
+	return bytes.Join(parts, []byte(".")), nil
 }
