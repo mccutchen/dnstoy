@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net"
+	"os"
 
 	"github.com/mccutchen/weekendns"
 )
@@ -25,21 +27,13 @@ func main() {
 	}
 
 	view := weekendns.NewByteView(buf[:n])
-	header, err := weekendns.ParseHeader(view)
+	msg, err := weekendns.ParseMessage(view)
 	if err != nil {
-		log.Fatalf("error parsing header: %s", err)
+		log.Fatalf("error parsing DNS message: %s", err)
 	}
-	log.Printf("header:   %#v", header)
-
-	question, err := weekendns.ParseQuestion(view)
-	if err != nil {
-		log.Fatalf("error parsing question: %s", err)
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(msg); err != nil {
+		log.Fatalf("error encoding DNS message as JSON: %s", err)
 	}
-	log.Printf("question: %#v", question)
-
-	record, err := weekendns.ParseRecord(view)
-	if err != nil {
-		log.Fatalf("error parsing record: %s", err)
-	}
-	log.Printf("record:   %#v", record)
 }

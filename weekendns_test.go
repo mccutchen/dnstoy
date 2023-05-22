@@ -94,3 +94,40 @@ func TestParseRecord(t *testing.T) {
 	be.NilErr(t, err)
 	be.DeepEqual(t, want, got)
 }
+
+func TestParseMessage(t *testing.T) {
+	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+
+	got, err := ParseMessage(resp)
+	be.NilErr(t, err)
+
+	want := Message{
+		Header: Header{
+			ID:              24662,
+			Flags:           33152,
+			QuestionCount:   1,
+			AnswerCount:     1,
+			AuthorityCount:  0,
+			AdditionalCount: 0,
+		},
+		Questions: []Question{
+			{
+				Name:  []byte("www.example.com"),
+				Type:  QueryTypeA,
+				Class: QueryClassIN,
+			},
+		},
+		Answers: []Record{
+			{
+				Name:  []byte("www.example.com"),
+				Type:  QueryTypeA,
+				Class: QueryClassIN,
+				TTL:   21147,
+				Data:  []byte("]\xb8\xd8\""),
+			},
+		},
+		Authorities: []Record{},
+		Additionals: []Record{},
+	}
+	be.DeepEqual(t, want, got)
+}

@@ -164,6 +164,67 @@ func (q Query) Encode() []byte {
 	return out
 }
 
+// Message defines a DNS Message:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1
+type Message struct {
+	Header      Header
+	Questions   []Question
+	Answers     []Record
+	Authorities []Record
+	Additionals []Record
+}
+
+func ParseMessage(v *ByteView) (Message, error) {
+	header, err := ParseHeader(v)
+	if err != nil {
+		return Message{}, err
+	}
+
+	questions := make([]Question, header.QuestionCount)
+	for i := 0; i < int(header.QuestionCount); i++ {
+		question, err := ParseQuestion(v)
+		if err != nil {
+			return Message{}, err
+		}
+		questions[i] = question
+	}
+
+	answers := make([]Record, header.AnswerCount)
+	for i := 0; i < int(header.AnswerCount); i++ {
+		rec, err := ParseRecord(v)
+		if err != nil {
+			return Message{}, err
+		}
+		answers[i] = rec
+	}
+
+	authorities := make([]Record, header.AuthorityCount)
+	for i := 0; i < int(header.AuthorityCount); i++ {
+		rec, err := ParseRecord(v)
+		if err != nil {
+			return Message{}, err
+		}
+		authorities[i] = rec
+	}
+
+	additionals := make([]Record, header.AdditionalCount)
+	for i := 0; i < int(header.AdditionalCount); i++ {
+		rec, err := ParseRecord(v)
+		if err != nil {
+			return Message{}, err
+		}
+		additionals[i] = rec
+	}
+
+	return Message{
+		Header:      header,
+		Questions:   questions,
+		Answers:     answers,
+		Authorities: authorities,
+		Additionals: additionals,
+	}, nil
+}
+
 // encodeName encodes a DNS name by splitting it into parts and prefixing each
 // part with its length and appending a nul byte, so "google.com" is encoded as
 // "6 google 3 com 0".
