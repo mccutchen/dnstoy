@@ -131,3 +131,10 @@ func TestParseMessage(t *testing.T) {
 	}
 	be.DeepEqual(t, want, got)
 }
+
+func TestFormatIP(t *testing.T) {
+	ip := []byte{93, 184, 216, 34}
+	got := FormatIP(ip)
+	want := "93.184.216.34"
+	be.Equal(t, want, got)
+}

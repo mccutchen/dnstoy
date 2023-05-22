@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"strconv"
 	"strings"
 )
 
@@ -270,4 +271,15 @@ func decodeName(v *ByteView) ([]byte, error) {
 		parts = append(parts, v.Next(length))
 	}
 	return bytes.Join(parts, []byte(".")), nil
+}
+
+func FormatIP(ipData []byte) string {
+	s := ""
+	for i, b := range ipData {
+		if i > 0 {
+			s += "."
+		}
+		s += strconv.Itoa(int(b))
+	}
+	return s
 }
