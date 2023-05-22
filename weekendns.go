@@ -31,7 +31,8 @@ type Reader interface {
 	io.ReaderAt
 }
 
-// Header defines a DNS packet header.
+// Header defines the Header section of a DNS message:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.1
 type Header struct {
 	ID              uint16
 	Flags           uint16
@@ -53,7 +54,7 @@ func (h Header) Encode() []byte {
 	return out
 }
 
-// ParseHeader parses a DNS header packet from a reader.
+// ParseHeader parses a Header section from a slice of bytes.
 func ParseHeader(v *ByteView) (Header, error) {
 	return Header{
 		ID:              binary.BigEndian.Uint16(v.Next(2)),
@@ -65,7 +66,8 @@ func ParseHeader(v *ByteView) (Header, error) {
 	}, nil
 }
 
-// Question defines a DNS packet question.
+// Question defines the Question section of a DNS message:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.2
 type Question struct {
 	Name  []byte
 	Type  QueryType
@@ -81,9 +83,9 @@ func (q Question) Encode() []byte {
 	return out
 }
 
-// ParseQuestion parses a DNS question packet from a reader.
+// ParseQuestion parses a Question section from a slice of bytes.
 func ParseQuestion(v *ByteView) (Question, error) {
-	name, err := decodeNameSimple(v)
+	name, err := decodeName(v)
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
 	}
@@ -94,24 +96,23 @@ func ParseQuestion(v *ByteView) (Question, error) {
 	}, nil
 }
 
-// Record defines a DNS packet record.
+// Record defines a Resource Record section:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.3
 type Record struct {
 	Name  []byte
 	Type  QueryType
 	Class QueryClass
-	TTL   uint32 // ???
+	TTL   uint32
 	Data  []byte
 }
 
 // ParseRecord parses a DNS record packet from a reader.
 func ParseRecord(v *ByteView) (Record, error) {
-	name, err := decodeNameSimple(v)
+	name, err := decodeName(v)
 	if err != nil {
 		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
 	}
 
-	// the type, class, TTL, and data length together are 10 bytes (2 + 2 + 4 + 2 = 10)
-	// so we read 10 bytes
 	record := Record{
 		Name:  name,
 		Type:  QueryType(binary.BigEndian.Uint16(v.Next(2))),
@@ -124,13 +125,14 @@ func ParseRecord(v *ByteView) (Record, error) {
 	return record, nil
 }
 
-// Query defines a DNS query.
+// Query defines a DNS query message.
 type Query struct {
 	Header   Header
 	Question Question
 }
 
-// NewQuery creates a new DNS query for the given domain name and record type.
+// NewQuery creates a new DNS query message for the given domain name and
+// record type.
 func NewQuery(domainName string, queryType QueryType) Query {
 	return newQueryHelper(domainName, queryType, uint16(rand.Intn(math.MaxUint16+1)))
 }
@@ -174,24 +176,6 @@ func encodeName(name string) []byte {
 	}
 	result = append(result, 0x0)
 	return result
-}
-
-// decodeNameSimple decodes a DNS name. See encodeName for details on the
-// format.
-func decodeNameSimple(v *ByteView) ([]byte, error) {
-	out := &bytes.Buffer{}
-	for i := 0; ; i++ {
-		length := v.NextByte()
-		if length == 0 {
-			break
-		}
-		// only write the "." separator after first iteration
-		if i > 0 {
-			out.Write([]byte("."))
-		}
-		out.Write(v.Next(uint16(length)))
-	}
-	return out.Bytes(), nil
 }
 
 // decodeName decodes a DNS name, optionally handling compression.

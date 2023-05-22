@@ -68,7 +68,7 @@ func TestParseQuestion(t *testing.T) {
 
 func TestDecodeName(t *testing.T) {
 	val := newByteViewFromString("\x03www\x07example\x03com\x00\x00\x01")
-	got, err := decodeNameSimple(val)
+	got, err := decodeName(val)
 	be.NilErr(t, err)
 	want := "www.example.com"
 	be.Equal(t, want, string(got))
@@ -87,6 +87,8 @@ func TestParseRecord(t *testing.T) {
 		Name:  []byte("www.example.com"),
 		Type:  QueryTypeA,
 		Class: QueryClassIN,
+		TTL:   21147,
+		Data:  []byte("]\xb8\xd8\""),
 	}
 	got, err := ParseRecord(resp)
 	be.NilErr(t, err)

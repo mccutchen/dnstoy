@@ -31,7 +31,7 @@ func main() {
 	}
 	log.Printf("header:   %#v", header)
 
-	question, err := weekendns.ParseHeader(view)
+	question, err := weekendns.ParseQuestion(view)
 	if err != nil {
 		log.Fatalf("error parsing question: %s", err)
 	}
