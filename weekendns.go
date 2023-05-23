@@ -345,6 +345,15 @@ func getNameserverIP(msg Message) string {
 	return ""
 }
 
+func getNameserverDomain(msg Message) string {
+	for _, a := range msg.Authorities {
+		if a.Type == QueryTypeNS {
+			return string(a.Data)
+		}
+	}
+	return ""
+}
+
 func Resolve(domainName string, queryType QueryType) (string, Message, error) {
 	nameserver := "198.41.0.4"
 	for {
@@ -362,6 +371,17 @@ func Resolve(domainName string, queryType QueryType) (string, Message, error) {
 		// recurse with new nameserver IP from the response
 		if nsIP := getNameserverIP(msg); nsIP != "" {
 			nameserver = nsIP
+			continue
+		}
+
+		// first resolve nameserver domain to nameserver IP, then recurse with
+		// new nameserver IP
+		if nsDomain := getNameserverDomain(msg); nsDomain != "" {
+			nextNameserver, _, err := Resolve(nsDomain, QueryTypeA)
+			if err != nil {
+				return "", msg, err
+			}
+			nameserver = nextNameserver
 			continue
 		}
 
