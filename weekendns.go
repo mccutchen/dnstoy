@@ -160,6 +160,33 @@ func (q Query) Encode() []byte {
 	return out
 }
 
+func SendQuery(dst string, domainName string, queryType QueryType) (Message, error) {
+	conn, err := net.Dial("udp", net.JoinHostPort(dst, "53"))
+	if err != nil {
+		return Message{}, err
+	}
+
+	query := NewQuery(domainName, queryType)
+	if _, err := conn.Write(query.Encode()); err != nil {
+		return Message{}, err
+	}
+
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return Message{}, err
+	}
+
+	msg, err := ParseMessage(NewByteView(buf[:n]))
+	if err != nil {
+		log.Printf("error parsing message: %s", err)
+		log.Printf("response: %q", string(buf[:n]))
+		return Message{}, err
+	}
+
+	return msg, nil
+}
+
 // Message defines a DNS Message:
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1
 type Message struct {
