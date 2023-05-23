@@ -3,6 +3,7 @@ package weekendns
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -324,4 +325,46 @@ func FormatIP(ipData []byte) string {
 		s += strconv.Itoa(int(b))
 	}
 	return s
+}
+
+func getAnswer(msg Message) string {
+	for _, a := range msg.Answers {
+		if a.Type == QueryTypeA {
+			return FormatIP(a.Data)
+		}
+	}
+	return ""
+}
+
+func getNameserverIP(msg Message) string {
+	for _, a := range msg.Additionals {
+		if a.Type == QueryTypeA {
+			return FormatIP(a.Data)
+		}
+	}
+	return ""
+}
+
+func Resolve(domainName string, queryType QueryType) (string, Message, error) {
+	nameserver := "198.41.0.4"
+	for {
+		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
+		msg, err := SendQuery(nameserver, domainName, queryType)
+		if err != nil {
+			return "", Message{}, err
+		}
+
+		// successfully resolved IP address, we're done
+		if ip := getAnswer(msg); ip != "" {
+			return ip, msg, nil
+		}
+
+		// recurse with new nameserver IP from the response
+		if nsIP := getNameserverIP(msg); nsIP != "" {
+			nameserver = nsIP
+			continue
+		}
+
+		return "", msg, errors.New("something went wrong")
+	}
 }
