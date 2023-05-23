@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io"
+	"log"
 	"math"
 	"math/rand"
+	"net"
 	"strconv"
 	"strings"
 )
@@ -17,20 +18,17 @@ type (
 )
 
 const (
-	QueryTypeA   = 1
-	QueryClassIN = 1
+	// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.2
+	QueryTypeA     QueryType = 1
+	QueryTypeNS    QueryType = 2
+	QueryTypeCNAME QueryType = 5
+	QueryTypeTXT   QueryType = 16
 
 	FlagRecursionDesired = 1 << 8
 
-	NameCompressionFlag = 0b1100_0000
-	NameCompressionMask = 0b0011_1111
+	// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.4
+	QueryClassIN QueryClass = 1
 )
-
-type Reader interface {
-	io.ByteReader
-	io.Reader
-	io.ReaderAt
-}
 
 // Header defines the Header section of a DNS message:
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.1
@@ -251,28 +249,36 @@ func decodeName(v *ByteView) ([]byte, error) {
 
 		// for compressed names, we need to decode the pointer to an earlier
 		// offset in the same message where the name can be found.
-		//
-		// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
-		if length&NameCompressionFlag != 0 {
-			pointerOffset := binary.BigEndian.Uint16([]byte{
-				byte(length & NameCompressionMask),
-				v.NextByte(),
-			})
+		if isCompressed, pointerOffset := checkNameCompression(length, v); isCompressed {
 			part, err := decodeName(v.WithOffset(pointerOffset))
 			if err != nil {
 				return nil, fmt.Errorf("decodeName: error decoding compressed name at offset %v: %w", pointerOffset, err)
 			}
 			parts = append(parts, part)
 			break
+		} else {
+			parts = append(parts, v.Next(uint16(length)))
 		}
-
-		// otherwise, we have just grab the next length bytes for this part of
-		// the name.
-		parts = append(parts, v.Next(uint16(length)))
 	}
 	return bytes.Join(parts, []byte(".")), nil
 }
 
+// checkNameCompression checks whether the given length indicates that name
+// compression is being used. If so, another byte is read from the view in
+// order to compute the offset where the referenced name can be found.
+func checkNameCompression(length byte, v *ByteView) (isCompressed bool, pointerOffset uint16) {
+	if length&0b1100_0000 != 0 {
+		// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
+		pointerOffset = binary.BigEndian.Uint16([]byte{
+			byte(length & 0b0011_1111),
+			v.NextByte(),
+		})
+		return true, pointerOffset
+	}
+	return false, 0
+}
+
+// FormatIP formats a byte slice as a dotted decimal IP address.
 func FormatIP(ipData []byte) string {
 	s := ""
 	for i, b := range ipData {
