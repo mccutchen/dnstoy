@@ -24,8 +24,6 @@ const (
 	QueryTypeCNAME QueryType = 5
 	QueryTypeTXT   QueryType = 16
 
-	FlagRecursionDesired = 1 << 8
-
 	// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.4
 	QueryClassIN QueryClass = 1
 )
@@ -143,7 +141,6 @@ func newQueryHelper(domainName string, queryType QueryType, id uint16) Query {
 		Header: Header{
 			ID:            id,
 			QuestionCount: 1,
-			Flags:         FlagRecursionDesired,
 		},
 		Question: Question{
 			Name:  encodeName(domainName),

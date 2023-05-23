@@ -28,6 +28,13 @@ func TestEncodeDNSNameExample(t *testing.T) {
 
 func TestEncodeQuery(t *testing.T) {
 	query := newQueryHelper("google.com", QueryTypeA, 1)
+
+	// Manually set RD (Recursion Desired) flag on the header for this test,
+	// since the specific test case here is from part 2, when this was added
+	// to all queries. The flag was later dropped in part 3.
+	// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.1
+	query.Header.Flags = 1 << 8
+
 	got := query.Encode()
 	want := "\x00\x01\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x06google\x03com\x00\x00\x01\x00\x01"
 	be.Equal(t, want, string(got))
