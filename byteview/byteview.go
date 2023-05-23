@@ -16,10 +16,12 @@ type View struct {
 	offset uint16
 }
 
+// New creates a new ByteView around the given slice of bytes.
 func New(data []byte) *View {
 	return &View{data: data}
 }
 
+// FromString creates a new ByteView from a sting.
 func FromString(data string) *View {
 	return New([]byte(data))
 }

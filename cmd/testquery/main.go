@@ -11,7 +11,7 @@ import (
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s DOMAIN", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s DOMAIN\n", os.Args[0])
 		os.Exit(1)
 	}
 
