@@ -118,7 +118,19 @@ func ParseRecord(v *ByteView) (Record, error) {
 	}
 
 	dataLen := binary.BigEndian.Uint16(v.Next(2))
-	record.Data = v.Next(dataLen)
+
+	switch record.Type {
+	case QueryTypeNS:
+		// https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.11
+		data, err := decodeName(v)
+		if err != nil {
+			return record, err
+		}
+		record.Data = data
+	default:
+		record.Data = v.Next(dataLen)
+	}
+
 	return record, nil
 }
 
