@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/carlmjohnson/be"
+	"github.com/mccutchen/weekendns/byteview"
 )
 
 func TestHeaderToBytesExample(t *testing.T) {
@@ -42,7 +43,7 @@ func TestEncodeQuery(t *testing.T) {
 }
 
 func TestParseHeader(t *testing.T) {
-	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := byteview.FromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 	want := Header{
 		ID:              24662,
 		Flags:           33152,
@@ -57,7 +58,7 @@ func TestParseHeader(t *testing.T) {
 }
 
 func TestParseQuestion(t *testing.T) {
-	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := byteview.FromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// first, parse and discard the header to get it out of the way
 	_, err := parseHeader(resp)
@@ -74,7 +75,7 @@ func TestParseQuestion(t *testing.T) {
 }
 
 func TestDecodeName(t *testing.T) {
-	val := newByteViewFromString("\x03www\x07example\x03com\x00\x00\x01")
+	val := byteview.FromString("\x03www\x07example\x03com\x00\x00\x01")
 	got, err := decodeName(val)
 	be.NilErr(t, err)
 	want := "www.example.com"
@@ -82,7 +83,7 @@ func TestDecodeName(t *testing.T) {
 }
 
 func TestParseRecord(t *testing.T) {
-	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	resp := byteview.FromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// parse and discard the header and question to get them out of the way
 	_, err := parseHeader(resp)
@@ -182,7 +183,7 @@ func TestParseMessage(t *testing.T) {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, err := parseMessage(newByteViewFromString(tc.resp))
+			got, err := parseMessage(byteview.FromString(tc.resp))
 			be.NilErr(t, err)
 			be.DeepEqual(t, tc.want, got)
 		})

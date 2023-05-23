@@ -11,6 +11,8 @@ import (
 	"net"
 	"strconv"
 	"strings"
+
+	"github.com/mccutchen/weekendns/byteview"
 )
 
 type (
@@ -53,7 +55,7 @@ func (h Header) Encode() []byte {
 }
 
 // parseHeader parses a Header section from a slice of bytes.
-func parseHeader(v *ByteView) (Header, error) {
+func parseHeader(v *byteview.View) (Header, error) {
 	bs, err := v.Next(12) // 12 == 2 bytes for each of the 6 header fields
 	if err != nil {
 		return Header{}, err
@@ -86,7 +88,7 @@ func (q Question) Encode() []byte {
 }
 
 // parseQuestion parses a Question section from a slice of bytes.
-func parseQuestion(v *ByteView) (Question, error) {
+func parseQuestion(v *byteview.View) (Question, error) {
 	name, err := decodeName(v)
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
@@ -113,7 +115,7 @@ type Record struct {
 }
 
 // parseRecord parses a DNS record section from a slice of bytes.
-func parseRecord(v *ByteView) (Record, error) {
+func parseRecord(v *byteview.View) (Record, error) {
 	name, err := decodeName(v)
 	if err != nil {
 		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
@@ -207,7 +209,7 @@ func sendQuery(dst string, domainName string, queryType QueryType) (Message, err
 		return Message{}, err
 	}
 
-	msg, err := parseMessage(NewByteView(buf[:n]))
+	msg, err := parseMessage(byteview.New(buf[:n]))
 	if err != nil {
 		log.Printf("error parsing message: %s", err)
 		log.Printf("response: %q", string(buf[:n]))
@@ -227,7 +229,7 @@ type Message struct {
 	Additionals []Record
 }
 
-func parseMessage(v *ByteView) (Message, error) {
+func parseMessage(v *byteview.View) (Message, error) {
 	header, err := parseHeader(v)
 	if err != nil {
 		return Message{}, err
@@ -293,7 +295,7 @@ func encodeName(name string) []byte {
 }
 
 // decodeName decodes a DNS name, optionally handling compression.
-func decodeName(v *ByteView) ([]byte, error) {
+func decodeName(v *byteview.View) ([]byte, error) {
 	var parts [][]byte
 	for {
 		length, err := v.NextByte()
@@ -335,7 +337,7 @@ func decodeName(v *ByteView) ([]byte, error) {
 // checkNameCompression checks whether the given length indicates that name
 // compression is being used. If so, another byte is read from the view in
 // order to compute the offset where the referenced name can be found.
-func checkNameCompression(length byte, v *ByteView) (isCompressed bool, pointerOffset uint16, err error) {
+func checkNameCompression(length byte, v *byteview.View) (isCompressed bool, pointerOffset uint16, err error) {
 	if length&0b1100_0000 != 0 {
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
 		b, err := v.NextByte()
