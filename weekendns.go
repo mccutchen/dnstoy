@@ -54,13 +54,17 @@ func (h Header) Encode() []byte {
 
 // parseHeader parses a Header section from a slice of bytes.
 func parseHeader(v *ByteView) (Header, error) {
+	bs, err := v.Next(12) // 12 == 2 bytes for each of the 6 header fields
+	if err != nil {
+		return Header{}, err
+	}
 	return Header{
-		ID:              binary.BigEndian.Uint16(v.Next(2)),
-		Flags:           binary.BigEndian.Uint16(v.Next(2)),
-		QuestionCount:   binary.BigEndian.Uint16(v.Next(2)),
-		AnswerCount:     binary.BigEndian.Uint16(v.Next(2)),
-		AuthorityCount:  binary.BigEndian.Uint16(v.Next(2)),
-		AdditionalCount: binary.BigEndian.Uint16(v.Next(2)),
+		ID:              binary.BigEndian.Uint16(bs[0:2]),
+		Flags:           binary.BigEndian.Uint16(bs[2:4]),
+		QuestionCount:   binary.BigEndian.Uint16(bs[4:6]),
+		AnswerCount:     binary.BigEndian.Uint16(bs[6:8]),
+		AuthorityCount:  binary.BigEndian.Uint16(bs[8:10]),
+		AdditionalCount: binary.BigEndian.Uint16(bs[10:12]),
 	}, nil
 }
 
@@ -87,10 +91,14 @@ func parseQuestion(v *ByteView) (Question, error) {
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
 	}
+	bs, err := v.Next(4) // 4 == 2 bytes each for type and class
+	if err != nil {
+		return Question{}, fmt.Errorf("parseQuestion: %w", err)
+	}
 	return Question{
 		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(v.Next(2))),
-		Class: QueryClass(binary.BigEndian.Uint16(v.Next(2))),
+		Type:  QueryType(binary.BigEndian.Uint16(bs[0:2])),
+		Class: QueryClass(binary.BigEndian.Uint16(bs[2:4])),
 	}, nil
 }
 
@@ -111,25 +119,34 @@ func parseRecord(v *ByteView) (Record, error) {
 		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
 	}
 
-	record := Record{
-		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(v.Next(2))),
-		Class: QueryClass(binary.BigEndian.Uint16(v.Next(2))),
-		TTL:   binary.BigEndian.Uint32(v.Next(4)),
+	bs, err := v.Next(10) // 10 == 2 bytes each for type, class, data length and 4 bytes for TTL
+	if err != nil {
+		return Record{}, fmt.Errorf("parseRecord: error reading metadata: %w", err)
 	}
 
-	dataLen := binary.BigEndian.Uint16(v.Next(2))
+	record := Record{
+		Name:  name,
+		Type:  QueryType(binary.BigEndian.Uint16(bs[0:2])),
+		Class: QueryClass(binary.BigEndian.Uint16(bs[2:4])),
+		TTL:   binary.BigEndian.Uint32(bs[4:8]),
+	}
+
+	dataLen := binary.BigEndian.Uint16(bs[8:10])
 
 	switch record.Type {
 	case QueryTypeNS:
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.11
 		data, err := decodeName(v)
 		if err != nil {
-			return record, err
+			return record, fmt.Errorf("parseRecord: error decoding data for NS record: %w", err)
 		}
 		record.Data = data
 	default:
-		record.Data = v.Next(dataLen)
+		data, err := v.Next(dataLen)
+		if err != nil {
+			return record, fmt.Errorf("parseRecord: error reading data field: %w", err)
+		}
+		record.Data = data
 	}
 
 	return record, nil
@@ -279,22 +296,37 @@ func encodeName(name string) []byte {
 func decodeName(v *ByteView) ([]byte, error) {
 	var parts [][]byte
 	for {
-		length := v.NextByte()
+		length, err := v.NextByte()
+		if err != nil {
+			return nil, fmt.Errorf("decodeName: error reading length: %s", err)
+		}
+
+		// we're done decoding this name
 		if length == 0 {
 			break
 		}
 
 		// for compressed names, we need to decode the pointer to an earlier
 		// offset in the same message where the name can be found.
-		if isCompressed, pointerOffset := checkNameCompression(length, v); isCompressed {
-			part, err := decodeName(v.WithOffset(pointerOffset))
+		if isCompressed, pointerOffset, err := checkNameCompression(length, v); err != nil {
+			return nil, fmt.Errorf("decodeName: error checking for name compression: %w", err)
+		} else if isCompressed {
+			v2, err := v.WithOffset(pointerOffset)
+			if err != nil {
+				return nil, fmt.Errorf("decodeName: invalid pointer offset %v: %w", pointerOffset, err)
+			}
+			part, err := decodeName(v2)
 			if err != nil {
 				return nil, fmt.Errorf("decodeName: error decoding compressed name at offset %v: %w", pointerOffset, err)
 			}
 			parts = append(parts, part)
 			break
 		} else {
-			parts = append(parts, v.Next(uint16(length)))
+			part, err := v.Next(uint16(length))
+			if err != nil {
+				return nil, fmt.Errorf("decodeName: error reading name part: %w", err)
+			}
+			parts = append(parts, part)
 		}
 	}
 	return bytes.Join(parts, []byte(".")), nil
@@ -303,16 +335,17 @@ func decodeName(v *ByteView) ([]byte, error) {
 // checkNameCompression checks whether the given length indicates that name
 // compression is being used. If so, another byte is read from the view in
 // order to compute the offset where the referenced name can be found.
-func checkNameCompression(length byte, v *ByteView) (isCompressed bool, pointerOffset uint16) {
+func checkNameCompression(length byte, v *ByteView) (isCompressed bool, pointerOffset uint16, err error) {
 	if length&0b1100_0000 != 0 {
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.4
-		pointerOffset = binary.BigEndian.Uint16([]byte{
-			byte(length & 0b0011_1111),
-			v.NextByte(),
-		})
-		return true, pointerOffset
+		b, err := v.NextByte()
+		if err != nil {
+			return false, 0, err
+		}
+		pointerOffset = binary.BigEndian.Uint16([]byte{byte(length & 0b0011_1111), b})
+		return true, pointerOffset, nil
 	}
-	return false, 0
+	return false, 0, nil
 }
 
 // formatIP formats a byte slice as a dotted decimal IP address.

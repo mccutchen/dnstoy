@@ -25,22 +25,23 @@ func newByteViewFromString(data string) *ByteView {
 
 // Next returns a sub-slice of the next N bytes from the view, advancing the
 // offset by N.
-//
-// This function panics if consuming N bytes would exceed the size of the
-// underlying slice.
-func (v *ByteView) Next(n uint16) []byte {
+func (v *ByteView) Next(n uint16) ([]byte, error) {
 	if int(v.offset+n) > v.Size() {
-		panic(fmt.Errorf("cannot read %d bytes (idx=%d size=%d)", n, v.offset, v.Size()))
+		return nil, fmt.Errorf("cannot read %d bytes (idx=%d size=%d)", n, v.offset, v.Size())
 	}
 	start, end := v.offset, v.offset+n
 	v.offset = end
-	return v.data[start:end]
+	return v.data[start:end], nil
 }
 
 // NextByte returns a single byte from the underlying slice, advancing the
 // offset by 1.
-func (v *ByteView) NextByte() byte {
-	return v.Next(1)[0]
+func (v *ByteView) NextByte() (byte, error) {
+	b, err := v.Next(1)
+	if err != nil {
+		return 0, err
+	}
+	return b[0], nil
 }
 
 // Size returns the length of the underlying slice.
@@ -50,14 +51,14 @@ func (v *ByteView) Size() int {
 
 // WithOffset returns a ByteView with a new offset into the same underlying
 // slice of bytes.
-func (v *ByteView) WithOffset(offset uint16) *ByteView {
+func (v *ByteView) WithOffset(offset uint16) (*ByteView, error) {
 	if int(offset) > v.Size() {
-		panic(fmt.Errorf("slice to invalid offset: offset=%d size=%d", offset, v.Size()))
+		return nil, fmt.Errorf("slice to invalid offset: offset=%d size=%d", offset, v.Size())
 	}
 	return &ByteView{
 		offset: offset,
 		data:   v.data,
-	}
+	}, nil
 }
 
 func (v *ByteView) String() string {
