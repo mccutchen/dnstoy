@@ -43,23 +43,23 @@ func (v *ByteView) NextByte() byte {
 	return v.Next(1)[0]
 }
 
-// Offset returns the current offset into the underlying slice.
-func (v *ByteView) Offset() uint16 {
-	return v.offset
-}
-
 // Size returns the length of the underlying slice.
 func (v *ByteView) Size() int {
 	return len(v.data)
 }
 
-// FromOffset returns a ByteView with a new offset into the same underlying
+// WithOffset returns a ByteView with a new offset into the same underlying
 // slice of bytes.
-func (v *ByteView) FromOffset(offset uint16) *ByteView {
+func (v *ByteView) WithOffset(offset uint16) *ByteView {
 	if int(offset) > v.Size() {
 		panic(fmt.Errorf("slice to invalid offset: offset=%d size=%d", offset, v.Size()))
 	}
 	return &ByteView{
-		data: v.data[offset:],
+		offset: offset,
+		data:   v.data,
 	}
+}
+
+func (v *ByteView) String() string {
+	return fmt.Sprintf("ByteView(offset=%v, size=%v)", v.offset, v.Size())
 }

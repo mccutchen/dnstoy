@@ -244,7 +244,7 @@ func encodeName(name string) []byte {
 func decodeName(v *ByteView) ([]byte, error) {
 	var parts [][]byte
 	for {
-		length := uint16(v.NextByte())
+		length := v.NextByte()
 		if length == 0 {
 			break
 		}
@@ -258,7 +258,7 @@ func decodeName(v *ByteView) ([]byte, error) {
 				byte(length & NameCompressionMask),
 				v.NextByte(),
 			})
-			part, err := decodeName(v.FromOffset(pointerOffset))
+			part, err := decodeName(v.WithOffset(pointerOffset))
 			if err != nil {
 				return nil, fmt.Errorf("decodeName: error decoding compressed name at offset %v: %w", pointerOffset, err)
 			}
@@ -268,7 +268,7 @@ func decodeName(v *ByteView) ([]byte, error) {
 
 		// otherwise, we have just grab the next length bytes for this part of
 		// the name.
-		parts = append(parts, v.Next(length))
+		parts = append(parts, v.Next(uint16(length)))
 	}
 	return bytes.Join(parts, []byte(".")), nil
 }

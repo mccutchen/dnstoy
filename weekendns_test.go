@@ -96,40 +96,90 @@ func TestParseRecord(t *testing.T) {
 }
 
 func TestParseMessage(t *testing.T) {
-	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
+	t.Parallel()
 
-	got, err := ParseMessage(resp)
-	be.NilErr(t, err)
-
-	want := Message{
-		Header: Header{
-			ID:              24662,
-			Flags:           33152,
-			QuestionCount:   1,
-			AnswerCount:     1,
-			AuthorityCount:  0,
-			AdditionalCount: 0,
-		},
-		Questions: []Question{
-			{
-				Name:  []byte("www.example.com"),
-				Type:  QueryTypeA,
-				Class: QueryClassIN,
+	testCases := map[string]struct {
+		resp string
+		want Message
+	}{
+		"example.com input from exercise part 2": {
+			resp: "`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"",
+			want: Message{
+				Header: Header{
+					ID:              24662,
+					Flags:           33152,
+					QuestionCount:   1,
+					AnswerCount:     1,
+					AuthorityCount:  0,
+					AdditionalCount: 0,
+				},
+				Questions: []Question{
+					{
+						Name:  []byte("www.example.com"),
+						Type:  QueryTypeA,
+						Class: QueryClassIN,
+					},
+				},
+				Answers: []Record{
+					{
+						Name:  []byte("www.example.com"),
+						Type:  QueryTypeA,
+						Class: QueryClassIN,
+						TTL:   21147,
+						Data:  []byte("]\xb8\xd8\""),
+					},
+				},
+				Authorities: []Record{},
+				Additionals: []Record{},
 			},
 		},
-		Answers: []Record{
-			{
-				Name:  []byte("www.example.com"),
-				Type:  QueryTypeA,
-				Class: QueryClassIN,
-				TTL:   21147,
-				Data:  []byte("]\xb8\xd8\""),
+		"actual www.facebook.com response": {
+			resp: "\x8bX\x81\x80\x00\x01\x00\x02\x00\x00\x00\x00\x03www\bfacebook\x03com\x00\x00\x01\x00\x01\xc0\f\x00\x05\x00\x01\x00\x00\f\x0e\x00\x11\tstar-mini\x04c10r\xc0\x10\xc0.\x00\x01\x00\x01\x00\x00\x00\x11\x00\x04\x9d\xf0\xf1#",
+			want: Message{
+				Header: Header{
+					ID:            0x8b58,
+					Flags:         0x8180,
+					QuestionCount: 1,
+					AnswerCount:   2,
+				},
+				Questions: []Question{
+					{
+						Name:  []byte("www.facebook.com"),
+						Type:  QueryTypeA,
+						Class: QueryClassIN,
+					},
+				},
+				Answers: []Record{
+					{
+						Name:  []byte("www.facebook.com"),
+						Type:  0x5,
+						Class: QueryClassIN,
+						TTL:   3086,
+						Data:  []byte("\tstar-mini\x04c10r\xc0\x10"),
+					},
+					{
+						Name:  []byte("star-mini.c10r.facebook.com"),
+						Type:  QueryTypeA,
+						Class: QueryClassIN,
+						TTL:   17,
+						Data:  []byte("\x9d\xf0\xf1#"),
+					},
+				},
+				Authorities: []Record{},
+				Additionals: []Record{},
 			},
 		},
-		Authorities: []Record{},
-		Additionals: []Record{},
 	}
-	be.DeepEqual(t, want, got)
+
+	for name, tc := range testCases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			got, err := ParseMessage(newByteViewFromString(tc.resp))
+			be.NilErr(t, err)
+			be.DeepEqual(t, tc.want, got)
+		})
+	}
 }
 
 func TestFormatIP(t *testing.T) {
