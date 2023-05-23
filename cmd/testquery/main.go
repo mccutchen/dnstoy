@@ -16,12 +16,12 @@ func main() {
 	}
 
 	domainName := os.Args[1]
-	msg, err := weekendns.SendQuery("8.8.8.8", domainName, weekendns.QueryTypeA)
+	rootNameServer := "198.41.0.4"
+	msg, err := weekendns.SendQuery(rootNameServer, domainName, weekendns.QueryTypeA)
 	if err != nil {
 		log.Fatal(err)
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(msg)
-	fmt.Println(weekendns.FormatIP(msg.Answers[0].Data))
 }
