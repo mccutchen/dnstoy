@@ -15,20 +15,25 @@ import (
 	"github.com/mccutchen/weekendns/byteview"
 )
 
-type (
-	QueryType  uint16
-	QueryClass uint16
+// ResourceType represents the TYPE field in a resource record:
+type ResourceType uint16
+
+// Query types:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.2
+const (
+	ResourceTypeA     ResourceType = 1
+	ResourceTypeNS    ResourceType = 2
+	ResourceTypeCNAME ResourceType = 5
+	ResourceTypeTXT   ResourceType = 16
 )
 
-const (
-	// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.2
-	QueryTypeA     QueryType = 1
-	QueryTypeNS    QueryType = 2
-	QueryTypeCNAME QueryType = 5
-	QueryTypeTXT   QueryType = 16
+// ResourceClass represents the CLASS field in a resource record:
+type ResourceClass uint16
 
-	// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.4
-	QueryClassIN QueryClass = 1
+// Query classes:
+// https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.4
+const (
+	ResourceClassIN ResourceClass = 1
 )
 
 // Header defines the Header section of a DNS message:
@@ -74,8 +79,8 @@ func parseHeader(v *byteview.View) (Header, error) {
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.2
 type Question struct {
 	Name  []byte
-	Type  QueryType
-	Class QueryClass
+	Type  ResourceType
+	Class ResourceClass
 }
 
 // Encode encodes a Question as bytes in network order.
@@ -99,8 +104,8 @@ func parseQuestion(v *byteview.View) (Question, error) {
 	}
 	return Question{
 		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(bs[0:2])),
-		Class: QueryClass(binary.BigEndian.Uint16(bs[2:4])),
+		Type:  ResourceType(binary.BigEndian.Uint16(bs[0:2])),
+		Class: ResourceClass(binary.BigEndian.Uint16(bs[2:4])),
 	}, nil
 }
 
@@ -108,8 +113,8 @@ func parseQuestion(v *byteview.View) (Question, error) {
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.3
 type Record struct {
 	Name  []byte
-	Type  QueryType
-	Class QueryClass
+	Type  ResourceType
+	Class ResourceClass
 	TTL   uint32
 	Data  []byte
 }
@@ -128,15 +133,15 @@ func parseRecord(v *byteview.View) (Record, error) {
 
 	record := Record{
 		Name:  name,
-		Type:  QueryType(binary.BigEndian.Uint16(bs[0:2])),
-		Class: QueryClass(binary.BigEndian.Uint16(bs[2:4])),
+		Type:  ResourceType(binary.BigEndian.Uint16(bs[0:2])),
+		Class: ResourceClass(binary.BigEndian.Uint16(bs[2:4])),
 		TTL:   binary.BigEndian.Uint32(bs[4:8]),
 	}
 
 	dataLen := binary.BigEndian.Uint16(bs[8:10])
 
 	switch record.Type {
-	case QueryTypeNS:
+	case ResourceTypeNS:
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.11
 		data, err := decodeName(v)
 		if err != nil {
@@ -162,13 +167,13 @@ type Query struct {
 
 // NewQuery creates a new DNS query message for the given domain name and
 // record type.
-func NewQuery(domainName string, queryType QueryType) Query {
+func NewQuery(domainName string, queryType ResourceType) Query {
 	return newQueryHelper(domainName, queryType, uint16(rand.Intn(math.MaxUint16+1)))
 }
 
 // newQueryHelper creates a new DNS query with a given ID, used for
 // deterministic testing of query building.
-func newQueryHelper(domainName string, queryType QueryType, id uint16) Query {
+func newQueryHelper(domainName string, queryType ResourceType, id uint16) Query {
 	return Query{
 		Header: Header{
 			ID:            id,
@@ -177,7 +182,7 @@ func newQueryHelper(domainName string, queryType QueryType, id uint16) Query {
 		Question: Question{
 			Name:  encodeName(domainName),
 			Type:  queryType,
-			Class: QueryClassIN,
+			Class: ResourceClassIN,
 		},
 	}
 }
@@ -192,7 +197,7 @@ func (q Query) Encode() []byte {
 	return out
 }
 
-func sendQuery(dst string, domainName string, queryType QueryType) (Message, error) {
+func sendQuery(dst string, domainName string, queryType ResourceType) (Message, error) {
 	conn, err := net.Dial("udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
@@ -364,7 +369,7 @@ func formatIP(ipData []byte) string {
 
 func getAnswer(msg Message) string {
 	for _, a := range msg.Answers {
-		if a.Type == QueryTypeA {
+		if a.Type == ResourceTypeA {
 			return formatIP(a.Data)
 		}
 	}
@@ -373,7 +378,7 @@ func getAnswer(msg Message) string {
 
 func getNameserverIP(msg Message) string {
 	for _, a := range msg.Additionals {
-		if a.Type == QueryTypeA {
+		if a.Type == ResourceTypeA {
 			return formatIP(a.Data)
 		}
 	}
@@ -382,7 +387,7 @@ func getNameserverIP(msg Message) string {
 
 func getNameserverDomain(msg Message) string {
 	for _, a := range msg.Authorities {
-		if a.Type == QueryTypeNS {
+		if a.Type == ResourceTypeNS {
 			return string(a.Data)
 		}
 	}
@@ -391,7 +396,7 @@ func getNameserverDomain(msg Message) string {
 
 // Resolve recursively resolves the given domain name, returning the resolved
 // IP address, the parsed DNS Message, and an error.
-func Resolve(domainName string, queryType QueryType) (string, Message, error) {
+func Resolve(domainName string, queryType ResourceType) (string, Message, error) {
 	nameserver := "198.41.0.4"
 	for {
 		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
@@ -414,7 +419,7 @@ func Resolve(domainName string, queryType QueryType) (string, Message, error) {
 		// first resolve nameserver domain to nameserver IP, then recurse with
 		// new nameserver IP
 		if nsDomain := getNameserverDomain(msg); nsDomain != "" {
-			nextNameserver, _, err := Resolve(nsDomain, QueryTypeA)
+			nextNameserver, _, err := Resolve(nsDomain, ResourceTypeA)
 			if err != nil {
 				return "", msg, err
 			}

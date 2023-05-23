@@ -16,7 +16,7 @@ func main() {
 	}
 
 	domainName := os.Args[1]
-	ip, msg, err := weekendns.Resolve(domainName, weekendns.QueryTypeA)
+	ip, msg, err := weekendns.Resolve(domainName, weekendns.ResourceTypeA)
 	if err != nil {
 		log.Fatal(err)
 	}

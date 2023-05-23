@@ -28,7 +28,7 @@ func TestEncodeDNSNameExample(t *testing.T) {
 }
 
 func TestEncodeQuery(t *testing.T) {
-	query := newQueryHelper("google.com", QueryTypeA, 1)
+	query := newQueryHelper("google.com", ResourceTypeA, 1)
 
 	// Manually set RD (Recursion Desired) flag on the header for this test,
 	// since the specific test case here is from part 2, when this was added
@@ -66,8 +66,8 @@ func TestParseQuestion(t *testing.T) {
 
 	want := Question{
 		Name:  []byte("www.example.com"),
-		Type:  QueryTypeA,
-		Class: QueryClassIN,
+		Type:  ResourceTypeA,
+		Class: ResourceClassIN,
 	}
 	got, err := parseQuestion(resp)
 	be.NilErr(t, err)
@@ -93,8 +93,8 @@ func TestParseRecord(t *testing.T) {
 
 	want := Record{
 		Name:  []byte("www.example.com"),
-		Type:  QueryTypeA,
-		Class: QueryClassIN,
+		Type:  ResourceTypeA,
+		Class: ResourceClassIN,
 		TTL:   21147,
 		Data:  []byte("]\xb8\xd8\""),
 	}
@@ -124,15 +124,15 @@ func TestParseMessage(t *testing.T) {
 				Questions: []Question{
 					{
 						Name:  []byte("www.example.com"),
-						Type:  QueryTypeA,
-						Class: QueryClassIN,
+						Type:  ResourceTypeA,
+						Class: ResourceClassIN,
 					},
 				},
 				Answers: []Record{
 					{
 						Name:  []byte("www.example.com"),
-						Type:  QueryTypeA,
-						Class: QueryClassIN,
+						Type:  ResourceTypeA,
+						Class: ResourceClassIN,
 						TTL:   21147,
 						Data:  []byte("]\xb8\xd8\""),
 					},
@@ -153,22 +153,22 @@ func TestParseMessage(t *testing.T) {
 				Questions: []Question{
 					{
 						Name:  []byte("www.facebook.com"),
-						Type:  QueryTypeA,
-						Class: QueryClassIN,
+						Type:  ResourceTypeA,
+						Class: ResourceClassIN,
 					},
 				},
 				Answers: []Record{
 					{
 						Name:  []byte("www.facebook.com"),
 						Type:  0x5,
-						Class: QueryClassIN,
+						Class: ResourceClassIN,
 						TTL:   3086,
 						Data:  []byte("\tstar-mini\x04c10r\xc0\x10"),
 					},
 					{
 						Name:  []byte("star-mini.c10r.facebook.com"),
-						Type:  QueryTypeA,
-						Class: QueryClassIN,
+						Type:  ResourceTypeA,
+						Class: ResourceClassIN,
 						TTL:   17,
 						Data:  []byte("\x9d\xf0\xf1#"),
 					},
