@@ -36,6 +36,11 @@ const (
 	ResourceClassIN ResourceClass = 1
 )
 
+// "Messages carried by UDP are restricted to 512 bytes (not counting the IP or
+// UDP headers)."
+// https://datatracker.ietf.org/doc/html/rfc1035#section-4.2.1
+const maxMessageSize = 512
+
 // Header defines the Header section of a DNS message:
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.1
 type Header struct {
@@ -208,7 +213,7 @@ func sendQuery(dst string, domainName string, queryType ResourceType) (Message, 
 		return Message{}, err
 	}
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, maxMessageSize)
 	n, err := conn.Read(buf)
 	if err != nil {
 		return Message{}, err
