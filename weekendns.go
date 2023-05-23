@@ -52,8 +52,8 @@ func (h Header) Encode() []byte {
 	return out
 }
 
-// ParseHeader parses a Header section from a slice of bytes.
-func ParseHeader(v *ByteView) (Header, error) {
+// parseHeader parses a Header section from a slice of bytes.
+func parseHeader(v *ByteView) (Header, error) {
 	return Header{
 		ID:              binary.BigEndian.Uint16(v.Next(2)),
 		Flags:           binary.BigEndian.Uint16(v.Next(2)),
@@ -81,8 +81,8 @@ func (q Question) Encode() []byte {
 	return out
 }
 
-// ParseQuestion parses a Question section from a slice of bytes.
-func ParseQuestion(v *ByteView) (Question, error) {
+// parseQuestion parses a Question section from a slice of bytes.
+func parseQuestion(v *ByteView) (Question, error) {
 	name, err := decodeName(v)
 	if err != nil {
 		return Question{}, fmt.Errorf("parseQuestion: error decoding name: %w", err)
@@ -104,8 +104,8 @@ type Record struct {
 	Data  []byte
 }
 
-// ParseRecord parses a DNS record packet from a reader.
-func ParseRecord(v *ByteView) (Record, error) {
+// parseRecord parses a DNS record section from a slice of bytes.
+func parseRecord(v *ByteView) (Record, error) {
 	name, err := decodeName(v)
 	if err != nil {
 		return Record{}, fmt.Errorf("parseRecord: error decoding name: %w", err)
@@ -173,7 +173,7 @@ func (q Query) Encode() []byte {
 	return out
 }
 
-func SendQuery(dst string, domainName string, queryType QueryType) (Message, error) {
+func sendQuery(dst string, domainName string, queryType QueryType) (Message, error) {
 	conn, err := net.Dial("udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
@@ -190,7 +190,7 @@ func SendQuery(dst string, domainName string, queryType QueryType) (Message, err
 		return Message{}, err
 	}
 
-	msg, err := ParseMessage(NewByteView(buf[:n]))
+	msg, err := parseMessage(NewByteView(buf[:n]))
 	if err != nil {
 		log.Printf("error parsing message: %s", err)
 		log.Printf("response: %q", string(buf[:n]))
@@ -210,15 +210,15 @@ type Message struct {
 	Additionals []Record
 }
 
-func ParseMessage(v *ByteView) (Message, error) {
-	header, err := ParseHeader(v)
+func parseMessage(v *ByteView) (Message, error) {
+	header, err := parseHeader(v)
 	if err != nil {
 		return Message{}, err
 	}
 
 	questions := make([]Question, header.QuestionCount)
 	for i := 0; i < int(header.QuestionCount); i++ {
-		question, err := ParseQuestion(v)
+		question, err := parseQuestion(v)
 		if err != nil {
 			return Message{}, err
 		}
@@ -227,7 +227,7 @@ func ParseMessage(v *ByteView) (Message, error) {
 
 	answers := make([]Record, header.AnswerCount)
 	for i := 0; i < int(header.AnswerCount); i++ {
-		rec, err := ParseRecord(v)
+		rec, err := parseRecord(v)
 		if err != nil {
 			return Message{}, err
 		}
@@ -236,7 +236,7 @@ func ParseMessage(v *ByteView) (Message, error) {
 
 	authorities := make([]Record, header.AuthorityCount)
 	for i := 0; i < int(header.AuthorityCount); i++ {
-		rec, err := ParseRecord(v)
+		rec, err := parseRecord(v)
 		if err != nil {
 			return Message{}, err
 		}
@@ -245,7 +245,7 @@ func ParseMessage(v *ByteView) (Message, error) {
 
 	additionals := make([]Record, header.AdditionalCount)
 	for i := 0; i < int(header.AdditionalCount); i++ {
-		rec, err := ParseRecord(v)
+		rec, err := parseRecord(v)
 		if err != nil {
 			return Message{}, err
 		}
@@ -315,8 +315,8 @@ func checkNameCompression(length byte, v *ByteView) (isCompressed bool, pointerO
 	return false, 0
 }
 
-// FormatIP formats a byte slice as a dotted decimal IP address.
-func FormatIP(ipData []byte) string {
+// formatIP formats a byte slice as a dotted decimal IP address.
+func formatIP(ipData []byte) string {
 	s := ""
 	for i, b := range ipData {
 		if i > 0 {
@@ -330,7 +330,7 @@ func FormatIP(ipData []byte) string {
 func getAnswer(msg Message) string {
 	for _, a := range msg.Answers {
 		if a.Type == QueryTypeA {
-			return FormatIP(a.Data)
+			return formatIP(a.Data)
 		}
 	}
 	return ""
@@ -339,7 +339,7 @@ func getAnswer(msg Message) string {
 func getNameserverIP(msg Message) string {
 	for _, a := range msg.Additionals {
 		if a.Type == QueryTypeA {
-			return FormatIP(a.Data)
+			return formatIP(a.Data)
 		}
 	}
 	return ""
@@ -354,11 +354,13 @@ func getNameserverDomain(msg Message) string {
 	return ""
 }
 
+// Resolve recursively resolves the given domain name, returning the resolved
+// IP address, the parsed DNS Message, and an error.
 func Resolve(domainName string, queryType QueryType) (string, Message, error) {
 	nameserver := "198.41.0.4"
 	for {
 		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
-		msg, err := SendQuery(nameserver, domainName, queryType)
+		msg, err := sendQuery(nameserver, domainName, queryType)
 		if err != nil {
 			return "", Message{}, err
 		}

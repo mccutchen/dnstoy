@@ -51,7 +51,7 @@ func TestParseHeader(t *testing.T) {
 		AuthorityCount:  0,
 		AdditionalCount: 0,
 	}
-	got, err := ParseHeader(resp)
+	got, err := parseHeader(resp)
 	be.NilErr(t, err)
 	be.Equal(t, want, got)
 }
@@ -60,7 +60,7 @@ func TestParseQuestion(t *testing.T) {
 	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// first, parse and discard the header to get it out of the way
-	_, err := ParseHeader(resp)
+	_, err := parseHeader(resp)
 	be.NilErr(t, err)
 
 	want := Question{
@@ -68,7 +68,7 @@ func TestParseQuestion(t *testing.T) {
 		Type:  QueryTypeA,
 		Class: QueryClassIN,
 	}
-	got, err := ParseQuestion(resp)
+	got, err := parseQuestion(resp)
 	be.NilErr(t, err)
 	be.DeepEqual(t, want, got)
 }
@@ -85,9 +85,9 @@ func TestParseRecord(t *testing.T) {
 	resp := newByteViewFromString("`V\x81\x80\x00\x01\x00\x01\x00\x00\x00\x00\x03www\x07example\x03com\x00\x00\x01\x00\x01\xc0\x0c\x00\x01\x00\x01\x00\x00R\x9b\x00\x04]\xb8\xd8\"")
 
 	// parse and discard the header and question to get them out of the way
-	_, err := ParseHeader(resp)
+	_, err := parseHeader(resp)
 	be.NilErr(t, err)
-	_, err = ParseQuestion(resp)
+	_, err = parseQuestion(resp)
 	be.NilErr(t, err)
 
 	want := Record{
@@ -97,7 +97,7 @@ func TestParseRecord(t *testing.T) {
 		TTL:   21147,
 		Data:  []byte("]\xb8\xd8\""),
 	}
-	got, err := ParseRecord(resp)
+	got, err := parseRecord(resp)
 	be.NilErr(t, err)
 	be.DeepEqual(t, want, got)
 }
@@ -182,7 +182,7 @@ func TestParseMessage(t *testing.T) {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got, err := ParseMessage(newByteViewFromString(tc.resp))
+			got, err := parseMessage(newByteViewFromString(tc.resp))
 			be.NilErr(t, err)
 			be.DeepEqual(t, tc.want, got)
 		})
@@ -191,7 +191,7 @@ func TestParseMessage(t *testing.T) {
 
 func TestFormatIP(t *testing.T) {
 	ip := []byte{93, 184, 216, 34}
-	got := FormatIP(ip)
+	got := formatIP(ip)
 	want := "93.184.216.34"
 	be.Equal(t, want, got)
 }
