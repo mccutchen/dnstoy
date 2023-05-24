@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
-	"net"
 	"strconv"
 	"strings"
 
@@ -201,33 +199,6 @@ func (q Query) Encode() []byte {
 	return out
 }
 
-func sendQuery(dst string, domainName string, resourceType ResourceType) (Message, error) {
-	conn, err := net.Dial("udp", net.JoinHostPort(dst, "53"))
-	if err != nil {
-		return Message{}, err
-	}
-
-	query := NewQuery(domainName, resourceType)
-	if _, err := conn.Write(query.Encode()); err != nil {
-		return Message{}, err
-	}
-
-	buf := make([]byte, maxMessageSize)
-	n, err := conn.Read(buf)
-	if err != nil {
-		return Message{}, err
-	}
-
-	msg, err := parseMessage(byteview.New(buf[:n]))
-	if err != nil {
-		log.Printf("error parsing message: %s", err)
-		log.Printf("response: %q", string(buf[:n]))
-		return Message{}, err
-	}
-
-	return msg, nil
-}
-
 // Message defines a DNS Message:
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1
 type Message struct {
@@ -369,68 +340,4 @@ func formatIP(ipData []byte) string {
 		s += strconv.Itoa(int(b))
 	}
 	return s
-}
-
-func getAnswer(msg Message) string {
-	for _, a := range msg.Answers {
-		if a.Type == ResourceTypeA {
-			return formatIP(a.Data)
-		}
-	}
-	return ""
-}
-
-func getNameserverIP(msg Message) string {
-	for _, a := range msg.Additionals {
-		if a.Type == ResourceTypeA {
-			return formatIP(a.Data)
-		}
-	}
-	return ""
-}
-
-func getNameserverDomain(msg Message) string {
-	for _, a := range msg.Authorities {
-		if a.Type == ResourceTypeNS {
-			return string(a.Data)
-		}
-	}
-	return ""
-}
-
-// Resolve recursively resolves the given domain name, returning the resolved
-// IP address, the parsed DNS Message, and an error.
-func Resolve(domainName string) (string, Message, error) {
-	nameserver := "198.41.0.4"
-	for {
-		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
-		msg, err := sendQuery(nameserver, domainName, ResourceTypeA)
-		if err != nil {
-			return "", Message{}, err
-		}
-
-		// successfully resolved IP address, we're done
-		if ip := getAnswer(msg); ip != "" {
-			return ip, msg, nil
-		}
-
-		// recurse with new nameserver IP from the response
-		if nsIP := getNameserverIP(msg); nsIP != "" {
-			nameserver = nsIP
-			continue
-		}
-
-		// first resolve nameserver domain to nameserver IP, then recurse with
-		// new nameserver IP
-		if nsDomain := getNameserverDomain(msg); nsDomain != "" {
-			nextNameserver, _, err := Resolve(nsDomain)
-			if err != nil {
-				return "", msg, err
-			}
-			nameserver = nextNameserver
-			continue
-		}
-
-		return "", msg, fmt.Errorf("failed to resolve %s to an IP", domainName)
-	}
 }

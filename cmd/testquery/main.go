@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -23,7 +24,7 @@ func main() {
 	}
 	for _, domain := range domains {
 		fmt.Printf("\nresolving %s\n", domain)
-		ip, msg, err := weekendns.Resolve(domain)
+		ip, msg, err := weekendns.Resolve(context.Background(), domain)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error resolving %q: %s\n", domain, err)
 			continue
