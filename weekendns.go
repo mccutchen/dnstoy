@@ -3,7 +3,6 @@ package weekendns
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -172,13 +171,13 @@ type Query struct {
 
 // NewQuery creates a new DNS query message for the given domain name and
 // record type.
-func NewQuery(domainName string, queryType ResourceType) Query {
-	return newQueryHelper(domainName, queryType, uint16(rand.Intn(math.MaxUint16+1)))
+func NewQuery(domainName string, resourceType ResourceType) Query {
+	return newQueryHelper(domainName, resourceType, uint16(rand.Intn(math.MaxUint16+1)))
 }
 
 // newQueryHelper creates a new DNS query with a given ID, used for
 // deterministic testing of query building.
-func newQueryHelper(domainName string, queryType ResourceType, id uint16) Query {
+func newQueryHelper(domainName string, resourceType ResourceType, id uint16) Query {
 	return Query{
 		Header: Header{
 			ID:            id,
@@ -186,7 +185,7 @@ func newQueryHelper(domainName string, queryType ResourceType, id uint16) Query 
 		},
 		Question: Question{
 			Name:  encodeName(domainName),
-			Type:  queryType,
+			Type:  resourceType,
 			Class: ResourceClassIN,
 		},
 	}
@@ -202,13 +201,13 @@ func (q Query) Encode() []byte {
 	return out
 }
 
-func sendQuery(dst string, domainName string, queryType ResourceType) (Message, error) {
+func sendQuery(dst string, domainName string, resourceType ResourceType) (Message, error) {
 	conn, err := net.Dial("udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
 	}
 
-	query := NewQuery(domainName, queryType)
+	query := NewQuery(domainName, resourceType)
 	if _, err := conn.Write(query.Encode()); err != nil {
 		return Message{}, err
 	}
@@ -401,11 +400,11 @@ func getNameserverDomain(msg Message) string {
 
 // Resolve recursively resolves the given domain name, returning the resolved
 // IP address, the parsed DNS Message, and an error.
-func Resolve(domainName string, queryType ResourceType) (string, Message, error) {
+func Resolve(domainName string) (string, Message, error) {
 	nameserver := "198.41.0.4"
 	for {
 		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
-		msg, err := sendQuery(nameserver, domainName, queryType)
+		msg, err := sendQuery(nameserver, domainName, ResourceTypeA)
 		if err != nil {
 			return "", Message{}, err
 		}
@@ -424,7 +423,7 @@ func Resolve(domainName string, queryType ResourceType) (string, Message, error)
 		// first resolve nameserver domain to nameserver IP, then recurse with
 		// new nameserver IP
 		if nsDomain := getNameserverDomain(msg); nsDomain != "" {
-			nextNameserver, _, err := Resolve(nsDomain, ResourceTypeA)
+			nextNameserver, _, err := Resolve(nsDomain)
 			if err != nil {
 				return "", msg, err
 			}
@@ -432,6 +431,6 @@ func Resolve(domainName string, queryType ResourceType) (string, Message, error)
 			continue
 		}
 
-		return "", msg, errors.New("something went wrong")
+		return "", msg, fmt.Errorf("failed to resolve %s to an IP", domainName)
 	}
 }
