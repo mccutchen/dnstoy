@@ -3,11 +3,11 @@ package weekendns
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"sync/atomic"
 
 	"github.com/mccutchen/weekendns/byteview"
+	"golang.org/x/exp/slog"
 )
 
 var dialer = &net.Dialer{}
@@ -37,7 +37,7 @@ var rootNameServers = []string{
 func Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
 	nameserver := chooseNameServer()
 	for {
-		log.Printf("querying nameserver %q for domain %q", nameserver, domainName)
+		slog.Info("querying nameserver for domain", slog.String("ns", nameserver), slog.String("domain", domainName))
 		msg, err := sendQuery(ctx, nameserver, domainName, ResourceTypeA)
 		if err != nil {
 			return nil, err
@@ -86,6 +86,13 @@ func sendQuery(ctx context.Context, dst string, domainName string, resourceType 
 		return Message{}, err
 	}
 
+	slog.Debug(
+		"starting DNS query",
+		slog.String("server", dst),
+		slog.String("domain", domainName),
+		slog.String("resource_type", resourceType.String()),
+	)
+
 	query := NewQuery(domainName, resourceType)
 	if _, err := conn.Write(query.Encode()); err != nil {
 		return Message{}, err
@@ -97,7 +104,10 @@ func sendQuery(ctx context.Context, dst string, domainName string, resourceType 
 		return Message{}, err
 	}
 
-	msg, err := parseMessage(byteview.New(buf[:n]))
+	resp := buf[:n]
+	slog.Debug("received DNS response", slog.String("response_bytes", string(resp)))
+
+	msg, err := parseMessage(byteview.New(resp))
 	if err != nil {
 		return Message{}, err
 	}

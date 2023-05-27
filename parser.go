@@ -24,6 +24,21 @@ const (
 	ResourceTypeTXT   ResourceType = 16
 )
 
+func (t ResourceType) String() string {
+	switch t {
+	case ResourceTypeA:
+		return "A"
+	case ResourceTypeNS:
+		return "NS"
+	case ResourceTypeCNAME:
+		return "CNAME"
+	case ResourceTypeTXT:
+		return "TXT"
+	default:
+		panic(fmt.Errorf("unknown resource type: %d (%x)", uint16(t), uint16(t)))
+	}
+}
+
 // ResourceClass represents the CLASS field in a resource record:
 type ResourceClass uint16
 
