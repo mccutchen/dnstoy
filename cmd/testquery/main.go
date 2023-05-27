@@ -21,7 +21,7 @@ func main() {
 	if debug {
 		logLevel = slog.LevelDebug
 	}
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
 	var domains []string
 	if flag.NArg() > 0 {
@@ -42,11 +42,15 @@ func main() {
 	enc := json.NewEncoder(os.Stderr)
 	enc.SetIndent("", "  ")
 
+	resolver := weekendns.New(&weekendns.Opts{
+		Logger: logger,
+	})
+
 	for _, domain := range domains {
 		fmt.Printf("\nresolving %s\n", domain)
-		ips, err := weekendns.Resolve(context.Background(), domain)
+		ips, err := resolver.Resolve(context.Background(), domain)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "error resolving %q: %s\n", domain, err)
+			logger.Error("error resolving domain", slog.String("domain", domain), slog.String("error", err.Error()))
 			continue
 		}
 		fmt.Printf("%s resolves to: %s\n", domain, ips)

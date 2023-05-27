@@ -10,13 +10,11 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-var dialer = &net.Dialer{}
-
 // authoritative root name servers
 // https://www.iana.org/domains/root/servers
 //
 // may be overridden in tests
-var rootNameServers = []string{
+var defaultRootNameServers = []string{
 	"198.41.0.4",     // a.root-servers.net Verisign, Inc.
 	"199.9.14.201",   // b.root-servers.net University of Southern California, Information Sciences Institute
 	"192.33.4.12",    // c.root-servers.net Cogent Communications
@@ -32,13 +30,50 @@ var rootNameServers = []string{
 	"202.12.27.33",   // m.root-servers.net WIDE Project
 }
 
+// New returns a new Resolver.
+func New(opts *Opts) *Resolver {
+	if opts == nil {
+		opts = &Opts{}
+	}
+	if len(opts.RootNameServers) == 0 {
+		opts.RootNameServers = defaultRootNameServers
+	}
+	if opts.Dialer == nil {
+		opts.Dialer = &net.Dialer{}
+	}
+	if opts.Logger == nil {
+		opts.Logger = slog.Default()
+	}
+	return &Resolver{
+		rootNameServers: opts.RootNameServers,
+		dialer:          opts.Dialer,
+		logger:          opts.Logger,
+		nameServerIdx:   &atomic.Int32{},
+	}
+}
+
+type Opts struct {
+	RootNameServers []string
+	Dialer          *net.Dialer
+	Logger          *slog.Logger
+}
+
+type Resolver struct {
+	rootNameServers []string
+	dialer          *net.Dialer
+	logger          *slog.Logger
+
+	// index into rootNameServers, used for round-robin choice
+	nameServerIdx *atomic.Int32
+}
+
 // Resolve recursively resolves the given domain name, returning the resolved
 // IP address, the parsed DNS Message, and an error.
-func Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
-	nameserver := chooseNameServer()
+func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
+	nameserver := r.chooseNameServer()
 	for {
-		slog.Info("querying nameserver for domain", slog.String("ns", nameserver), slog.String("domain", domainName))
-		msg, err := sendQuery(ctx, nameserver, domainName, ResourceTypeA)
+		r.logger.Info("querying nameserver for domain", slog.String("ns", nameserver), slog.String("domain", domainName))
+		msg, err := r.sendQuery(ctx, nameserver, domainName, ResourceTypeA)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +101,7 @@ func Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
 		// new nameserver IP
 		if nsDomains := findNSDomains(msg); len(nsDomains) > 0 {
 			nsDomain := nsDomains[0]
-			nextNSAddrs, err := Resolve(ctx, nsDomain)
+			nextNSAddrs, err := r.Resolve(ctx, nsDomain)
 			if err != nil {
 				return nil, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
 			}
@@ -80,13 +115,13 @@ func Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
 	}
 }
 
-func sendQuery(ctx context.Context, dst string, domainName string, resourceType ResourceType) (Message, error) {
-	conn, err := dialer.DialContext(ctx, "udp", net.JoinHostPort(dst, "53"))
+func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, resourceType ResourceType) (Message, error) {
+	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
 	}
 
-	slog.Debug(
+	r.logger.Debug(
 		"starting DNS query",
 		slog.String("server", dst),
 		slog.String("domain", domainName),
@@ -105,7 +140,7 @@ func sendQuery(ctx context.Context, dst string, domainName string, resourceType 
 	}
 
 	resp := buf[:n]
-	slog.Debug("received DNS response", slog.String("response_bytes", string(resp)))
+	r.logger.Debug("received DNS response", slog.String("response_bytes", string(resp)))
 
 	msg, err := parseMessage(byteview.New(resp))
 	if err != nil {
@@ -139,13 +174,9 @@ func findNSDomains(msg Message) []string {
 	return results
 }
 
-// currentNameServer is an index into rootNameServers, used to choose a name
-// server in round-robin fashion.
-var currentNameServer = &atomic.Int32{}
-
 // chooseNameServer chooses an authoritative root name server in round-robin
 // fashion.
-func chooseNameServer() string {
-	idx := currentNameServer.Add(1)
-	return rootNameServers[int(idx)%len(rootNameServers)]
+func (r *Resolver) chooseNameServer() string {
+	idx := r.nameServerIdx.Add(1)
+	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
 }
