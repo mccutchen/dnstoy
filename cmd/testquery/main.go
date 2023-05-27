@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"golang.org/x/exp/slog"
 
@@ -13,15 +13,8 @@ import (
 )
 
 func main() {
-	var debug bool
-	flag.BoolVar(&debug, "debug", false, "Enable debug logging")
+	debug := flag.Bool("debug", false, "Enable debug logging")
 	flag.Parse()
-
-	logLevel := slog.LevelInfo
-	if debug {
-		logLevel = slog.LevelDebug
-	}
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
 	var domains []string
 	if flag.NArg() > 0 {
@@ -39,20 +32,28 @@ func main() {
 		}
 	}
 
-	enc := json.NewEncoder(os.Stderr)
-	enc.SetIndent("", "  ")
+	logLevel := slog.LevelInfo
+	if isDebugEnabled(*debug) {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
 	resolver := weekendns.New(&weekendns.Opts{
 		Logger: logger,
 	})
 
 	for _, domain := range domains {
-		fmt.Printf("\nresolving %s\n", domain)
+		fmt.Printf("\nresolving %s ...\n", domain)
 		ips, err := resolver.Resolve(context.Background(), domain)
 		if err != nil {
-			logger.Error("error resolving domain", slog.String("domain", domain), slog.String("error", err.Error()))
+			fmt.Printf("error resolving %s: %s\n", domain, err)
 			continue
 		}
 		fmt.Printf("%s resolves to: %s\n", domain, ips)
 	}
+}
+
+func isDebugEnabled(debugFlag bool) bool {
+	debugEnv := strings.ToLower(os.Getenv("DEBUG"))
+	return debugFlag || (debugEnv != "" && debugEnv != "0" && debugEnv != "false")
 }

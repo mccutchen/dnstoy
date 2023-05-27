@@ -70,9 +70,11 @@ type Resolver struct {
 // Resolve recursively resolves the given domain name, returning the resolved
 // IP address, the parsed DNS Message, and an error.
 func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
+	// initial query is sent to a root name server. subsequent iterations
+	// represent recursive queries that may be sent to name servers specified
+	// in DNS responses.
 	nameserver := r.chooseNameServer()
 	for {
-		r.logger.Info("querying nameserver for domain", slog.String("ns", nameserver), slog.String("domain", domainName))
 		msg, err := r.sendQuery(ctx, nameserver, domainName, ResourceTypeA)
 		if err != nil {
 			return nil, err
@@ -111,6 +113,11 @@ func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, er
 			}
 		}
 
+		r.logger.Debug(
+			"no IP addresses found",
+			slog.String("domain", domainName),
+			slog.String("msg", fmt.Sprintf("%#v", msg)),
+		)
 		return nil, fmt.Errorf("failed to resolve %s to an IP", domainName)
 	}
 }
@@ -122,7 +129,7 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 	}
 
 	r.logger.Debug(
-		"starting DNS query",
+		"sending DNS query",
 		slog.String("server", dst),
 		slog.String("domain", domainName),
 		slog.String("resource_type", resourceType.String()),
@@ -140,10 +147,17 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 	}
 
 	resp := buf[:n]
-	r.logger.Debug("received DNS response", slog.String("response_bytes", string(resp)))
+	r.logger.Debug("raw DNS response bytes", slog.String("resp_bytes", string(resp)))
 
 	msg, err := parseMessage(byteview.New(resp))
 	if err != nil {
+		r.logger.Debug(
+			"failed to parse DNS response",
+			slog.String("err", err.Error()),
+			slog.String("domain", domainName),
+			slog.String("server", dst),
+			slog.String("resource_type", resourceType.String()),
+		)
 		return Message{}, err
 	}
 
