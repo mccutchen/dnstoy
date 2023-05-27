@@ -9,7 +9,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/mccutchen/weekendns/byteview"
+	"github.com/mccutchen/weekendns/internal/byteview"
 )
 
 // ResourceType represents the TYPE field in a resource record:

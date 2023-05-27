@@ -6,7 +6,7 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/mccutchen/weekendns/byteview"
+	"github.com/mccutchen/weekendns/internal/byteview"
 	"golang.org/x/exp/slog"
 )
 

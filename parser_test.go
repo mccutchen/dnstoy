@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/carlmjohnson/be"
-	"github.com/mccutchen/weekendns/byteview"
+
+	"github.com/mccutchen/weekendns/internal/byteview"
 )
 
 func TestHeaderToBytesExample(t *testing.T) {
