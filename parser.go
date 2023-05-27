@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"strconv"
+	"net"
 	"strings"
 
 	"github.com/mccutchen/weekendns/byteview"
@@ -330,14 +330,14 @@ func checkNameCompression(length byte, v *byteview.View) (isCompressed bool, poi
 	return false, 0, nil
 }
 
-// formatIP formats a byte slice as a dotted decimal IP address.
-func formatIP(ipData []byte) string {
-	s := ""
-	for i, b := range ipData {
-		if i > 0 {
-			s += "."
-		}
-		s += strconv.Itoa(int(b))
+// parseIPAddrs parses one or more IPv4 net.IP addresses from a slice of bytes.
+func parseIPAddrs(ipData []byte) ([]net.IP, error) {
+	if len(ipData) < 4 || len(ipData)%4 != 0 {
+		return nil, fmt.Errorf("parseIP: invalid IP address data: %q", string(ipData))
 	}
-	return s
+	var results []net.IP
+	for i := 0; i < len(ipData); i += 4 {
+		results = append(results, net.IPv4(ipData[i], ipData[i+1], ipData[i+2], ipData[i+3]))
+	}
+	return results, nil
 }

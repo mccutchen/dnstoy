@@ -1,6 +1,8 @@
 package weekendns
 
 import (
+	"errors"
+	"net"
 	"testing"
 
 	"github.com/carlmjohnson/be"
@@ -190,9 +192,50 @@ func TestParseMessage(t *testing.T) {
 	}
 }
 
-func TestFormatIP(t *testing.T) {
-	ip := []byte{93, 184, 216, 34}
-	got := formatIP(ip)
-	want := "93.184.216.34"
-	be.Equal(t, want, got)
+func TestParseIPs(t *testing.T) {
+	testCases := []struct {
+		ipData  []byte
+		want    []net.IP
+		wantErr error
+	}{
+		{
+			ipData: []byte{93, 184, 216, 34},
+			want:   []net.IP{net.IPv4(93, 184, 216, 34)},
+		},
+		{
+			ipData: []byte{
+				93, 184, 216, 34,
+				1, 2, 3, 4,
+				5, 6, 7, 8,
+			},
+			want: []net.IP{
+				net.IPv4(93, 184, 216, 34),
+				net.IPv4(1, 2, 3, 4),
+				net.IPv4(5, 6, 7, 8),
+			},
+		},
+		{
+			// not enough data
+			ipData:  []byte{1},
+			wantErr: errors.New(`parseIP: invalid IP address data: "\x01"`),
+		},
+		{
+			// not evenly divisible by 4
+			ipData:  []byte{1, 2, 3, 4, 5},
+			wantErr: errors.New(`parseIP: invalid IP address data: "\x01\x02\x03\x04\x05"`),
+		},
+	}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(string(tc.ipData), func(t *testing.T) {
+			got, err := parseIPAddrs(tc.ipData)
+			if tc.wantErr != nil {
+				be.Nonzero(t, err)
+				be.Equal(t, tc.wantErr.Error(), err.Error())
+				return
+			}
+			be.NilErr(t, err)
+			be.DeepEqual(t, tc.want, got)
+		})
+	}
 }
