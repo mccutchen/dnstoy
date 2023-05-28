@@ -21,6 +21,7 @@ const (
 	RecordTypeA     RecordType = 1
 	RecordTypeNS    RecordType = 2
 	RecordTypeCNAME RecordType = 5
+	RecordTypeSOA   RecordType = 6
 	RecordTypeTXT   RecordType = 16
 	RecordTypeAAAA  RecordType = 28
 )
@@ -31,6 +32,8 @@ func (t RecordType) String() string {
 		return "A"
 	case RecordTypeNS:
 		return "NS"
+	case RecordTypeSOA:
+		return "SOA"
 	case RecordTypeCNAME:
 		return "CNAME"
 	case RecordTypeTXT:
