@@ -31,7 +31,7 @@ func TestEncodeDNSNameExample(t *testing.T) {
 }
 
 func TestEncodeQuery(t *testing.T) {
-	query := newQueryHelper("google.com", ResourceTypeA, 1)
+	query := newQueryHelper("google.com", RecordTypeA, 1)
 
 	// Manually set RD (Recursion Desired) flag on the header for this test,
 	// since the specific test case here is from part 2, when this was added
@@ -69,7 +69,7 @@ func TestParseQuestion(t *testing.T) {
 
 	want := Question{
 		Name:  []byte("www.example.com"),
-		Type:  ResourceTypeA,
+		Type:  RecordTypeA,
 		Class: ResourceClassIN,
 	}
 	got, err := parseQuestion(resp)
@@ -96,7 +96,7 @@ func TestParseRecord(t *testing.T) {
 
 	want := Record{
 		Name:  []byte("www.example.com"),
-		Type:  ResourceTypeA,
+		Type:  RecordTypeA,
 		Class: ResourceClassIN,
 		TTL:   21147,
 		Data:  []byte("]\xb8\xd8\""),
@@ -127,14 +127,14 @@ func TestParseMessage(t *testing.T) {
 				Questions: []Question{
 					{
 						Name:  []byte("www.example.com"),
-						Type:  ResourceTypeA,
+						Type:  RecordTypeA,
 						Class: ResourceClassIN,
 					},
 				},
 				Answers: []Record{
 					{
 						Name:  []byte("www.example.com"),
-						Type:  ResourceTypeA,
+						Type:  RecordTypeA,
 						Class: ResourceClassIN,
 						TTL:   21147,
 						Data:  []byte("]\xb8\xd8\""),
@@ -156,7 +156,7 @@ func TestParseMessage(t *testing.T) {
 				Questions: []Question{
 					{
 						Name:  []byte("www.facebook.com"),
-						Type:  ResourceTypeA,
+						Type:  RecordTypeA,
 						Class: ResourceClassIN,
 					},
 				},
@@ -170,7 +170,7 @@ func TestParseMessage(t *testing.T) {
 					},
 					{
 						Name:  []byte("star-mini.c10r.facebook.com"),
-						Type:  ResourceTypeA,
+						Type:  RecordTypeA,
 						Class: ResourceClassIN,
 						TTL:   17,
 						Data:  []byte("\x9d\xf0\xf1#"),

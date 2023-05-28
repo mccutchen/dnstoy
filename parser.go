@@ -12,28 +12,31 @@ import (
 	"github.com/mccutchen/weekendns/internal/byteview"
 )
 
-// ResourceType represents the TYPE field in a resource record:
-type ResourceType uint16
+// RecordType represents the TYPE field in a resource record:
+type RecordType uint16
 
 // Query types:
 // https://datatracker.ietf.org/doc/html/rfc1035#section-3.2.2
 const (
-	ResourceTypeA     ResourceType = 1
-	ResourceTypeNS    ResourceType = 2
-	ResourceTypeCNAME ResourceType = 5
-	ResourceTypeTXT   ResourceType = 16
+	RecordTypeA     RecordType = 1
+	RecordTypeNS    RecordType = 2
+	RecordTypeCNAME RecordType = 5
+	RecordTypeTXT   RecordType = 16
+	RecordTypeAAAA  RecordType = 28
 )
 
-func (t ResourceType) String() string {
+func (t RecordType) String() string {
 	switch t {
-	case ResourceTypeA:
+	case RecordTypeA:
 		return "A"
-	case ResourceTypeNS:
+	case RecordTypeNS:
 		return "NS"
-	case ResourceTypeCNAME:
+	case RecordTypeCNAME:
 		return "CNAME"
-	case ResourceTypeTXT:
+	case RecordTypeTXT:
 		return "TXT"
+	case RecordTypeAAAA:
+		return "AAAA"
 	default:
 		panic(fmt.Errorf("unknown resource type: %d (%x)", uint16(t), uint16(t)))
 	}
@@ -96,7 +99,7 @@ func parseHeader(v *byteview.View) (Header, error) {
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.2
 type Question struct {
 	Name  []byte
-	Type  ResourceType
+	Type  RecordType
 	Class ResourceClass
 }
 
@@ -121,7 +124,7 @@ func parseQuestion(v *byteview.View) (Question, error) {
 	}
 	return Question{
 		Name:  name,
-		Type:  ResourceType(binary.BigEndian.Uint16(bs[0:2])),
+		Type:  RecordType(binary.BigEndian.Uint16(bs[0:2])),
 		Class: ResourceClass(binary.BigEndian.Uint16(bs[2:4])),
 	}, nil
 }
@@ -130,7 +133,7 @@ func parseQuestion(v *byteview.View) (Question, error) {
 // https://datatracker.ietf.org/doc/html/rfc1035#section-4.1.3
 type Record struct {
 	Name  []byte
-	Type  ResourceType
+	Type  RecordType
 	Class ResourceClass
 	TTL   uint32
 	Data  []byte
@@ -150,7 +153,7 @@ func parseRecord(v *byteview.View) (Record, error) {
 
 	record := Record{
 		Name:  name,
-		Type:  ResourceType(binary.BigEndian.Uint16(bs[0:2])),
+		Type:  RecordType(binary.BigEndian.Uint16(bs[0:2])),
 		Class: ResourceClass(binary.BigEndian.Uint16(bs[2:4])),
 		TTL:   binary.BigEndian.Uint32(bs[4:8]),
 	}
@@ -158,7 +161,7 @@ func parseRecord(v *byteview.View) (Record, error) {
 	dataLen := binary.BigEndian.Uint16(bs[8:10])
 
 	switch record.Type {
-	case ResourceTypeNS:
+	case RecordTypeNS:
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.11
 		data, err := decodeName(v)
 		if err != nil {
@@ -184,13 +187,13 @@ type Query struct {
 
 // NewQuery creates a new DNS query message for the given domain name and
 // record type.
-func NewQuery(domainName string, resourceType ResourceType) Query {
-	return newQueryHelper(domainName, resourceType, uint16(rand.Intn(math.MaxUint16+1)))
+func NewQuery(domainName string, recordType RecordType) Query {
+	return newQueryHelper(domainName, recordType, uint16(rand.Intn(math.MaxUint16+1)))
 }
 
 // newQueryHelper creates a new DNS query with a given ID, used for
 // deterministic testing of query building.
-func newQueryHelper(domainName string, resourceType ResourceType, id uint16) Query {
+func newQueryHelper(domainName string, recordType RecordType, id uint16) Query {
 	return Query{
 		Header: Header{
 			ID:            id,
@@ -198,7 +201,7 @@ func newQueryHelper(domainName string, resourceType ResourceType, id uint16) Que
 		},
 		Question: Question{
 			Name:  encodeName(domainName),
-			Type:  resourceType,
+			Type:  recordType,
 			Class: ResourceClassIN,
 		},
 	}

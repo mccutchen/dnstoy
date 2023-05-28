@@ -75,10 +75,14 @@ func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, er
 	// in DNS responses.
 	nameserver := r.chooseNameServer()
 	for {
-		msg, err := r.sendQuery(ctx, nameserver, domainName, ResourceTypeA)
+		msg, err := r.sendQuery(ctx, nameserver, domainName, RecordTypeA)
 		if err != nil {
 			return nil, err
 		}
+
+		r.logRecords("answer", msg.Answers)
+		r.logRecords("additional", msg.Additionals)
+		r.logRecords("authority", msg.Authorities)
 
 		// successfully resolved IP address, we're done
 		ips, err := ipAddrsFromRecords(msg.Answers)
@@ -122,7 +126,7 @@ func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, er
 	}
 }
 
-func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, resourceType ResourceType) (Message, error) {
+func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, recordType RecordType) (Message, error) {
 	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
@@ -132,10 +136,10 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 		"sending DNS query",
 		slog.String("server", dst),
 		slog.String("domain", domainName),
-		slog.String("resource_type", resourceType.String()),
+		slog.String("resource_type", recordType.String()),
 	)
 
-	query := NewQuery(domainName, resourceType)
+	query := NewQuery(domainName, recordType)
 	if _, err := conn.Write(query.Encode()); err != nil {
 		return Message{}, err
 	}
@@ -156,7 +160,7 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 			slog.String("err", err.Error()),
 			slog.String("domain", domainName),
 			slog.String("server", dst),
-			slog.String("resource_type", resourceType.String()),
+			slog.String("resource_type", recordType.String()),
 		)
 		return Message{}, err
 	}
@@ -164,10 +168,28 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 	return msg, nil
 }
 
+// chooseNameServer chooses an authoritative root name server in round-robin
+// fashion.
+func (r *Resolver) chooseNameServer() string {
+	idx := r.nameServerIdx.Add(1)
+	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
+}
+
+func (r *Resolver) logRecords(section string, records []Record) {
+	for _, a := range records {
+		r.logger.Debug(
+			"resource record",
+			slog.String("section", section),
+			slog.String("type", a.Type.String()),
+			slog.String("value", string(a.Data)),
+		)
+	}
+}
+
 func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 	results := make([]net.IP, 0, len(records))
 	for _, r := range records {
-		if r.Type == ResourceTypeA {
+		if r.Type == RecordTypeA {
 			ips, err := parseIPAddrs(r.Data)
 			if err != nil {
 				return nil, err
@@ -181,16 +203,9 @@ func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 func findNSDomains(msg Message) []string {
 	results := make([]string, 0, len(msg.Authorities))
 	for _, a := range msg.Authorities {
-		if a.Type == ResourceTypeNS {
+		if a.Type == RecordTypeNS {
 			results = append(results, string(a.Data))
 		}
 	}
 	return results
-}
-
-// chooseNameServer chooses an authoritative root name server in round-robin
-// fashion.
-func (r *Resolver) chooseNameServer() string {
-	idx := r.nameServerIdx.Add(1)
-	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
 }
