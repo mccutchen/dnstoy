@@ -163,10 +163,10 @@ func TestParseMessage(t *testing.T) {
 				Answers: []Record{
 					{
 						Name:  []byte("www.facebook.com"),
-						Type:  0x5,
+						Type:  RecordTypeCNAME,
 						Class: ResourceClassIN,
 						TTL:   3086,
-						Data:  []byte("\tstar-mini\x04c10r\xc0\x10"),
+						Data:  []byte("star-mini.c10r.facebook.com"),
 					},
 					{
 						Name:  []byte("star-mini.c10r.facebook.com"),

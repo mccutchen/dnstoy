@@ -164,7 +164,7 @@ func parseRecord(v *byteview.View) (Record, error) {
 	dataLen := binary.BigEndian.Uint16(bs[8:10])
 
 	switch record.Type {
-	case RecordTypeNS:
+	case RecordTypeNS, RecordTypeCNAME:
 		// https://datatracker.ietf.org/doc/html/rfc1035#section-3.3.11
 		data, err := decodeName(v)
 		if err != nil {
