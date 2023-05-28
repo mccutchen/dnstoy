@@ -70,63 +70,95 @@ type Resolver struct {
 // Resolve recursively resolves the given domain name, returning the resolved
 // IP address, the parsed DNS Message, and an error.
 func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
-	// initial query is sent to a root name server. subsequent iterations
-	// represent recursive queries that may be sent to name servers specified
-	// in DNS responses.
-	nameserver := r.chooseNameServer()
-	for {
-		msg, err := r.sendQuery(ctx, nameserver, domainName, RecordTypeA)
-		if err != nil {
-			return nil, err
-		}
-
-		r.logRecords("answer", msg.Answers)
-		r.logRecords("additional", msg.Additionals)
-		r.logRecords("authority", msg.Authorities)
-
-		// successfully resolved IP address, we're done
-		ips, err := ipAddrsFromRecords(msg.Answers)
-		if err != nil {
-			return nil, err
-		}
-		if len(ips) > 0 {
-			return ips, nil
-		}
-
-		// resolve again with a new name server from the response
-		nsIPs, err := ipAddrsFromRecords(msg.Additionals)
-		if err != nil {
-			return nil, err
-		}
-		if len(nsIPs) > 0 {
-			nameserver = nsIPs[0].String()
-			continue
-		}
-
-		// first resolve nameserver domain to nameserver IP, then recurse with
-		// new nameserver IP
-		if nsDomains := findNSDomains(msg); len(nsDomains) > 0 {
-			nsDomain := nsDomains[0]
-			nextNSAddrs, err := r.Resolve(ctx, nsDomain)
-			if err != nil {
-				return nil, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
-			}
-			if len(nextNSAddrs) > 0 {
-				nameserver = nextNSAddrs[0].String()
-				continue
-			}
-		}
-
-		r.logger.Debug(
-			"no IP addresses found",
-			slog.String("domain", domainName),
-			slog.String("msg", fmt.Sprintf("%#v", msg)),
-		)
-		return nil, fmt.Errorf("failed to resolve %s to an IP", domainName)
-	}
+	result, _, err := r.doResolve(ctx, r.chooseNameServer(), domainName, 0)
+	return result, err
 }
 
-func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, recordType RecordType) (Message, error) {
+func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName string, depth int) ([]net.IP, int, error) {
+	msg, err := r.sendQuery(ctx, nameServer, domainName, RecordTypeA, depth)
+	if err != nil {
+		return nil, depth, err
+	}
+
+	r.logRecords("answer", msg.Answers, depth)
+	r.logRecords("additional", msg.Additionals, depth)
+	r.logRecords("authority", msg.Authorities, depth)
+
+	// successfully resolved IP address, we're done
+	ips, err := ipAddrsFromRecords(msg.Answers)
+	if err != nil {
+		return nil, depth, err
+	}
+	if len(ips) > 0 {
+		return ips, depth, nil
+	}
+
+	// resolve again with a new name server from the response
+	nsIPs, err := ipAddrsFromRecords(msg.Additionals)
+	if err != nil {
+		return nil, depth, err
+	}
+	if len(nsIPs) > 0 {
+		nameServer = nsIPs[0].String()
+		r.logger.Debug(
+			"recursively resolving with new name server",
+			slog.Int("depth", depth),
+			slog.String("ns_addr", nameServer),
+			slog.Int("ns_addr_count", len(nsIPs)),
+			slog.String("domain", domainName),
+		)
+		return r.doResolve(ctx, nameServer, domainName, depth+1)
+	}
+
+	// first resolve nameserver domain to nameserver IP, then recurse with
+	// new nameserver IP
+	if nsDomains := domainsFromRecords(msg.Authorities, RecordTypeNS); len(nsDomains) > 0 {
+		nsDomain := nsDomains[0]
+		r.logger.Debug(
+			"resolving NS domain",
+			slog.Int("depth", depth),
+			slog.String("ns_domain", nsDomain),
+			slog.Int("ns_domain_count", len(nsDomains)),
+			slog.String("domain", domainName),
+		)
+		nextNSAddrs, newDepth, err := r.doResolve(ctx, nameServer, nsDomain, depth+1)
+		if err != nil {
+			return nil, newDepth, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
+		}
+		if len(nextNSAddrs) > 0 {
+			nameServer = nextNSAddrs[0].String()
+			r.logger.Debug(
+				"recursively resolving with new name server",
+				slog.Int("depth", depth),
+				slog.String("ns_addr", nameServer),
+				slog.Int("ns_addr_count", len(nextNSAddrs)),
+				slog.String("domain", domainName),
+			)
+			return r.doResolve(ctx, nameServer, domainName, newDepth+1)
+		}
+	}
+
+	if cnameDomains := domainsFromRecords(msg.Answers, RecordTypeCNAME); len(cnameDomains) > 0 {
+		cnameDomain := cnameDomains[0]
+		r.logger.Debug(
+			"recursively resolving CNAME",
+			slog.Int("depth", depth),
+			slog.String("cname", cnameDomain),
+			slog.Int("cname_count", len(cnameDomains)),
+			slog.String("domain", domainName),
+		)
+		return r.doResolve(ctx, nameServer, cnameDomain, depth+1)
+	}
+
+	r.logger.Debug(
+		"no IP addresses found",
+		slog.String("domain", domainName),
+		slog.String("msg", fmt.Sprintf("%#v", msg)),
+	)
+	return nil, depth, fmt.Errorf("failed to resolve %s to an IP", domainName)
+}
+
+func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, recordType RecordType, depth int) (Message, error) {
 	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dst, "53"))
 	if err != nil {
 		return Message{}, err
@@ -134,6 +166,7 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 
 	r.logger.Debug(
 		"sending DNS query",
+		slog.Int("depth", depth),
 		slog.String("server", dst),
 		slog.String("domain", domainName),
 		slog.String("resource_type", recordType.String()),
@@ -157,6 +190,7 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 	if err != nil {
 		r.logger.Debug(
 			"failed to parse DNS response",
+			slog.Int("depth", depth),
 			slog.String("err", err.Error()),
 			slog.String("domain", domainName),
 			slog.String("server", dst),
@@ -175,11 +209,13 @@ func (r *Resolver) chooseNameServer() string {
 	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
 }
 
-func (r *Resolver) logRecords(section string, records []Record) {
+func (r *Resolver) logRecords(section string, records []Record, depth int) {
 	for _, a := range records {
 		r.logger.Debug(
 			"resource record",
+			slog.Int("depth", depth),
 			slog.String("section", section),
+			slog.String("name", string(a.Name)),
 			slog.String("type", a.Type.String()),
 			slog.String("value", string(a.Data)),
 		)
@@ -200,10 +236,10 @@ func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 	return results, nil
 }
 
-func findNSDomains(msg Message) []string {
-	results := make([]string, 0, len(msg.Authorities))
-	for _, a := range msg.Authorities {
-		if a.Type == RecordTypeNS {
+func domainsFromRecords(records []Record, targetRecordType RecordType) []string {
+	results := make([]string, 0, len(records))
+	for _, a := range records {
+		if a.Type == targetRecordType {
 			results = append(results, string(a.Data))
 		}
 	}
