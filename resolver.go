@@ -52,12 +52,14 @@ func New(opts *Opts) *Resolver {
 	}
 }
 
+// Opts defines the options used to configure a Resolver.
 type Opts struct {
 	RootNameServers []string
 	Dialer          *net.Dialer
 	Logger          *slog.Logger
 }
 
+// Resolver makes DNS queries.
 type Resolver struct {
 	rootNameServers []string
 	dialer          *net.Dialer
@@ -68,7 +70,7 @@ type Resolver struct {
 }
 
 // Resolve recursively resolves the given domain name, returning the resolved
-// IP address, the parsed DNS Message, and an error.
+// IP addresses.
 func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
 	result, _, err := r.doResolve(ctx, r.chooseNameServer(), domainName, 0)
 	return result, err
@@ -105,7 +107,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("depth", depth),
 			slog.String("ns_addr", nameServer),
 			slog.Int("ns_addr_count", len(nsIPs)),
-			slog.String("domain", domainName),
+			slog.String("target_domain", domainName),
 		)
 		return r.doResolve(ctx, nameServer, domainName, depth+1)
 	}
@@ -119,7 +121,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("depth", depth),
 			slog.String("ns_domain", nsDomain),
 			slog.Int("ns_domain_count", len(nsDomains)),
-			slog.String("domain", domainName),
+			slog.String("target_domain", domainName),
 		)
 		nextNSAddrs, newDepth, err := r.doResolve(ctx, nameServer, nsDomain, depth+1)
 		if err != nil {
@@ -132,7 +134,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 				slog.Int("depth", depth),
 				slog.String("ns_addr", nameServer),
 				slog.Int("ns_addr_count", len(nextNSAddrs)),
-				slog.String("domain", domainName),
+				slog.String("target_domain", domainName),
 			)
 			return r.doResolve(ctx, nameServer, domainName, newDepth+1)
 		}
@@ -145,21 +147,22 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("depth", depth),
 			slog.String("cname", cnameDomain),
 			slog.Int("cname_count", len(cnameDomains)),
-			slog.String("domain", domainName),
+			slog.String("target_domain", domainName),
 		)
 		return r.doResolve(ctx, nameServer, cnameDomain, depth+1)
 	}
 
 	r.logger.Debug(
 		"no IP addresses found",
-		slog.String("domain", domainName),
+		slog.String("target_domain", domainName),
 		slog.String("msg", fmt.Sprintf("%#v", msg)),
 	)
 	return nil, depth, fmt.Errorf("failed to resolve %s to an IP", domainName)
 }
 
-func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string, recordType RecordType, depth int) (Message, error) {
-	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dst, "53"))
+// sendQuery queries a DNS server for a domain and parses the response.
+func (r *Resolver) sendQuery(ctx context.Context, dnsServer string, targetDomain string, recordType RecordType, depth int) (Message, error) {
+	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dnsServer, "53"))
 	if err != nil {
 		return Message{}, err
 	}
@@ -167,12 +170,12 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 	r.logger.Debug(
 		"sending DNS query",
 		slog.Int("depth", depth),
-		slog.String("server", dst),
-		slog.String("domain", domainName),
+		slog.String("dns_server", dnsServer),
+		slog.String("target_domain", targetDomain),
 		slog.String("resource_type", recordType.String()),
 	)
 
-	query := NewQuery(domainName, recordType)
+	query := NewQuery(targetDomain, recordType)
 	if _, err := conn.Write(query.Encode()); err != nil {
 		return Message{}, err
 	}
@@ -192,8 +195,8 @@ func (r *Resolver) sendQuery(ctx context.Context, dst string, domainName string,
 			"failed to parse DNS response",
 			slog.Int("depth", depth),
 			slog.String("err", err.Error()),
-			slog.String("domain", domainName),
-			slog.String("server", dst),
+			slog.String("target_domain", targetDomain),
+			slog.String("server", dnsServer),
 			slog.String("resource_type", recordType.String()),
 		)
 		return Message{}, err
@@ -226,7 +229,7 @@ func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 	results := make([]net.IP, 0, len(records))
 	for _, r := range records {
 		if r.Type == RecordTypeA {
-			ips, err := parseIPAddrs(r.Data)
+			ips, err := parseIPv4Addrs(r.Data)
 			if err != nil {
 				return nil, err
 			}

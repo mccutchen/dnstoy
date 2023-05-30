@@ -351,8 +351,8 @@ func checkNameCompression(length byte, v *byteview.View) (isCompressed bool, poi
 	return false, 0, nil
 }
 
-// parseIPAddrs parses one or more IPv4 net.IP addresses from a slice of bytes.
-func parseIPAddrs(ipData []byte) ([]net.IP, error) {
+// parseIPv4Addrs parses one or more IPv4 net.IP addresses from a slice of bytes.
+func parseIPv4Addrs(ipData []byte) ([]net.IP, error) {
 	if len(ipData) < 4 || len(ipData)%4 != 0 {
 		return nil, fmt.Errorf("parseIP: invalid IP address data: %q", string(ipData))
 	}

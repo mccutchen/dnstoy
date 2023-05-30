@@ -229,7 +229,7 @@ func TestParseIPs(t *testing.T) {
 	for _, tc := range testCases {
 		tc := tc
 		t.Run(string(tc.ipData), func(t *testing.T) {
-			got, err := parseIPAddrs(tc.ipData)
+			got, err := parseIPv4Addrs(tc.ipData)
 			if tc.wantErr != nil {
 				be.Nonzero(t, err)
 				be.Equal(t, tc.wantErr.Error(), err.Error())
