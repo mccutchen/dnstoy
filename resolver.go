@@ -69,14 +69,14 @@ type Resolver struct {
 	nameServerIdx *atomic.Int32
 }
 
-// Resolve recursively resolves the given domain name, returning the resolved
+// LookupIP recursively resolves the given domain name, returning the resolved
 // IP addresses.
-func (r *Resolver) Resolve(ctx context.Context, domainName string) ([]net.IP, error) {
-	result, _, err := r.doResolve(ctx, r.chooseNameServer(), domainName, 0)
+func (r *Resolver) LookupIP(ctx context.Context, domainName string) ([]net.IP, error) {
+	result, _, err := r.doLookupIP(ctx, r.chooseNameServer(), domainName, 0)
 	return result, err
 }
 
-func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName string, depth int) ([]net.IP, int, error) {
+func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName string, depth int) ([]net.IP, int, error) {
 	msg, err := r.sendQuery(ctx, nameServer, domainName, RecordTypeA, depth)
 	if err != nil {
 		return nil, depth, err
@@ -109,7 +109,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("ns_addr_count", len(nsIPs)),
 			slog.String("target_domain", domainName),
 		)
-		return r.doResolve(ctx, nameServer, domainName, depth+1)
+		return r.doLookupIP(ctx, nameServer, domainName, depth+1)
 	}
 
 	// first resolve nameserver domain to nameserver IP, then recurse with
@@ -123,7 +123,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("ns_domain_count", len(nsDomains)),
 			slog.String("target_domain", domainName),
 		)
-		nextNSAddrs, newDepth, err := r.doResolve(ctx, nameServer, nsDomain, depth+1)
+		nextNSAddrs, newDepth, err := r.doLookupIP(ctx, nameServer, nsDomain, depth+1)
 		if err != nil {
 			return nil, newDepth, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
 		}
@@ -136,7 +136,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 				slog.Int("ns_addr_count", len(nextNSAddrs)),
 				slog.String("target_domain", domainName),
 			)
-			return r.doResolve(ctx, nameServer, domainName, newDepth+1)
+			return r.doLookupIP(ctx, nameServer, domainName, newDepth+1)
 		}
 	}
 
@@ -149,7 +149,7 @@ func (r *Resolver) doResolve(ctx context.Context, nameServer string, domainName 
 			slog.Int("cname_count", len(cnameDomains)),
 			slog.String("target_domain", domainName),
 		)
-		return r.doResolve(ctx, nameServer, cnameDomain, depth+1)
+		return r.doLookupIP(ctx, nameServer, cnameDomain, depth+1)
 	}
 
 	r.logger.Debug(

@@ -44,7 +44,7 @@ func main() {
 
 	for _, domain := range domains {
 		fmt.Printf("\nresolving %s ...\n", domain)
-		ips, err := resolver.Resolve(context.Background(), domain)
+		ips, err := resolver.LookupIP(context.Background(), domain)
 		if err != nil {
 			fmt.Printf("error resolving %s: %s\n", domain, err)
 			continue
