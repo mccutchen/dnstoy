@@ -39,11 +39,10 @@ clean:
 # test & lint
 # =============================================================================
 test:
-	go test $(TEST_ARGS) ./...
+	go test $(TEST_ARGS) $(COVERAGE_ARGS) ./...
 .PHONY: test
 
-testcover:
-	go test $(TEST_ARGS) $(COVERAGE_ARGS) ./...
+testcover: test
 	go tool cover -html=$(COVERAGE_PATH)
 .PHONY: testcover
 
