@@ -3,6 +3,7 @@ package weekendns
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net"
 	"sync/atomic"
 
@@ -101,7 +102,7 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 		return nil, depth, err
 	}
 	if len(nsIPs) > 0 {
-		nameServer = nsIPs[0].String()
+		nameServer = randomChoice(nsIPs).String()
 		r.logger.Debug(
 			"recursively resolving with new name server",
 			slog.Int("depth", depth),
@@ -115,7 +116,7 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 	// first resolve nameserver domain to nameserver IP, then recurse with
 	// new nameserver IP
 	if nsDomains := domainsFromRecords(msg.Authorities, RecordTypeNS); len(nsDomains) > 0 {
-		nsDomain := nsDomains[0]
+		nsDomain := randomChoice(nsDomains)
 		r.logger.Debug(
 			"resolving NS domain",
 			slog.Int("depth", depth),
@@ -137,9 +138,9 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 				r.logger.Debug(
 					"recursively resolving with new name server",
 					slog.Int("depth", depth),
+					slog.String("target_domain", domainName),
 					slog.String("ns_addr", nameServer),
 					slog.Int("ns_addr_count", len(nextNSAddrs)),
-					slog.String("target_domain", domainName),
 				)
 				return r.doLookupIP(ctx, nameServer, domainName, newDepth+1)
 			}
@@ -147,7 +148,7 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 	}
 
 	if cnameDomains := domainsFromRecords(msg.Answers, RecordTypeCNAME); len(cnameDomains) > 0 {
-		cnameDomain := cnameDomains[0]
+		cnameDomain := randomChoice(cnameDomains)
 		r.logger.Debug(
 			"recursively resolving CNAME",
 			slog.Int("depth", depth),
@@ -260,4 +261,9 @@ func domainsFromRecords(records []Record, targetRecordType RecordType) []string 
 		}
 	}
 	return results
+}
+
+// randomChoice returns a random element from the given slice.
+func randomChoice[T any](choices []T) T {
+	return choices[rand.Intn(len(choices))]
 }
