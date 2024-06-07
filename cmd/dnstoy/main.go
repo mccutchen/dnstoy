@@ -4,16 +4,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"strings"
+	"time"
 
 	"golang.org/x/exp/slog"
 
-	"github.com/mccutchen/weekendns"
+	"github.com/mccutchen/dnstoy"
 )
 
 func main() {
 	debug := flag.Bool("debug", false, "Enable debug logging")
+	timout := flag.Duration("timeout", 1*time.Second, "Timeout for DNS queries")
 	flag.Parse()
 
 	var domains []string
@@ -38,8 +41,11 @@ func main() {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 
-	resolver := weekendns.New(&weekendns.Opts{
+	resolver := dnstoy.New(&dnstoy.Opts{
 		Logger: logger,
+		Dialer: &net.Dialer{
+			Timeout: *timout,
+		},
 	})
 
 	for _, domain := range domains {

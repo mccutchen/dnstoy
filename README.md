@@ -1,4 +1,4 @@
-# weekendns
+# dnstoy
 
 Working through [Julia Evans][]'s [Implement DNS in a Weekend][] project.
 

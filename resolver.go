@@ -1,4 +1,4 @@
-package weekendns
+package dnstoy
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync/atomic"
 
-	"github.com/mccutchen/weekendns/internal/byteview"
+	"github.com/mccutchen/dnstoy/internal/byteview"
 	"golang.org/x/exp/slog"
 )
 

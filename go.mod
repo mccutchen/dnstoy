@@ -1,4 +1,4 @@
-module github.com/mccutchen/weekendns
+module github.com/mccutchen/dnstoy
 
 go 1.20
 

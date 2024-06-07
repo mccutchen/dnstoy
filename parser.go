@@ -1,4 +1,4 @@
-package weekendns
+package dnstoy
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/mccutchen/weekendns/internal/byteview"
+	"github.com/mccutchen/dnstoy/internal/byteview"
 )
 
 // RecordType represents the TYPE field in a resource record:

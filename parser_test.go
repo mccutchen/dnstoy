@@ -1,4 +1,4 @@
-package weekendns
+package dnstoy
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/carlmjohnson/be"
 
-	"github.com/mccutchen/weekendns/internal/byteview"
+	"github.com/mccutchen/dnstoy/internal/byteview"
 )
 
 func TestHeaderToBytesExample(t *testing.T) {
