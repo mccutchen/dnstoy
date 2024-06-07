@@ -52,6 +52,3 @@ lint:
 	$(GOLINT) -set_exit_status ./...
 	$(STATICCHECK) ./...
 .PHONY: lint
-
-run: build
-	$(OUT_DIR)/testquery

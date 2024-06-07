@@ -126,7 +126,7 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 		)
 		nextNSAddrs, newDepth, err := r.doLookupIP(ctx, nameServer, nsDomain, depth+1)
 		if err != nil {
-			return nil, newDepth, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
+			return nil, newDepth, fmt.Errorf("error resolving nameserver: %w", err)
 		}
 		if len(nextNSAddrs) > 0 {
 			for _, nsAddr := range nextNSAddrs {
