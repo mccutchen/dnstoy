@@ -353,12 +353,24 @@ func checkNameCompression(length byte, v *byteview.View) (isCompressed bool, poi
 
 // parseIPv4Addrs parses one or more IPv4 net.IP addresses from a slice of bytes.
 func parseIPv4Addrs(ipData []byte) ([]net.IP, error) {
-	if len(ipData) < 4 || len(ipData)%4 != 0 {
-		return nil, fmt.Errorf("parseIP: invalid IP address data: %q", string(ipData))
+	if len(ipData)%4 != 0 {
+		return nil, fmt.Errorf("parseIP: invalid IPv4 address data: %q", string(ipData))
 	}
 	var results []net.IP
 	for i := 0; i < len(ipData); i += 4 {
 		results = append(results, net.IPv4(ipData[i], ipData[i+1], ipData[i+2], ipData[i+3]))
+	}
+	return results, nil
+}
+
+func parseIPv6Addrs(ipData []byte) ([]net.IP, error) {
+	addrSize := 16
+	if len(ipData)%addrSize != 0 {
+		return nil, fmt.Errorf("parseIP: invalid IPv6 address data: %q (len=%d)", string(ipData), len(ipData))
+	}
+	var results []net.IP
+	for i := 0; i < len(ipData); i += addrSize {
+		results = append(results, net.IP(ipData[i:i+addrSize]))
 	}
 	return results, nil
 }

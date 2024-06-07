@@ -218,12 +218,12 @@ func TestParseIPs(t *testing.T) {
 		{
 			// not enough data
 			ipData:  []byte{1},
-			wantErr: errors.New(`parseIP: invalid IP address data: "\x01"`),
+			wantErr: errors.New(`parseIP: invalid IPv4 address data: "\x01"`),
 		},
 		{
 			// not evenly divisible by 4
 			ipData:  []byte{1, 2, 3, 4, 5},
-			wantErr: errors.New(`parseIP: invalid IP address data: "\x01\x02\x03\x04\x05"`),
+			wantErr: errors.New(`parseIP: invalid IPv4 address data: "\x01\x02\x03\x04\x05"`),
 		},
 	}
 	for _, tc := range testCases {

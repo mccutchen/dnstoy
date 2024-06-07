@@ -45,10 +45,10 @@ func New(opts *Opts) *Resolver {
 		opts.Logger = slog.Default()
 	}
 	return &Resolver{
-		rootNameServers: opts.RootNameServers,
-		dialer:          opts.Dialer,
-		logger:          opts.Logger,
-		nameServerIdx:   &atomic.Int32{},
+		rootNameServers:   opts.RootNameServers,
+		dialer:            opts.Dialer,
+		logger:            opts.Logger,
+		rootNameServerIdx: &atomic.Int32{},
 	}
 }
 
@@ -66,13 +66,13 @@ type Resolver struct {
 	logger          *slog.Logger
 
 	// index into rootNameServers, used for round-robin choice
-	nameServerIdx *atomic.Int32
+	rootNameServerIdx *atomic.Int32
 }
 
 // LookupIP recursively resolves the given domain name, returning the resolved
 // IP addresses.
 func (r *Resolver) LookupIP(ctx context.Context, domainName string) ([]net.IP, error) {
-	result, _, err := r.doLookupIP(ctx, r.chooseNameServer(), domainName, 0)
+	result, _, err := r.doLookupIP(ctx, r.chooseRootNameServer(), domainName, 0)
 	return result, err
 }
 
@@ -128,15 +128,21 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 			return nil, newDepth, fmt.Errorf("error resolving nameserver %q: %w", nsDomain, err)
 		}
 		if len(nextNSAddrs) > 0 {
-			nameServer = nextNSAddrs[0].String()
-			r.logger.Debug(
-				"recursively resolving with new name server",
-				slog.Int("depth", depth),
-				slog.String("ns_addr", nameServer),
-				slog.Int("ns_addr_count", len(nextNSAddrs)),
-				slog.String("target_domain", domainName),
-			)
-			return r.doLookupIP(ctx, nameServer, domainName, newDepth+1)
+			for _, nsAddr := range nextNSAddrs {
+				if nsAddr.IsPrivate() {
+					r.logger.Debug("skipping private name server", slog.String("ns_addr", nsAddr.String()))
+					continue
+				}
+				nameServer = nsAddr.String()
+				r.logger.Debug(
+					"recursively resolving with new name server",
+					slog.Int("depth", depth),
+					slog.String("ns_addr", nameServer),
+					slog.Int("ns_addr_count", len(nextNSAddrs)),
+					slog.String("target_domain", domainName),
+				)
+				return r.doLookupIP(ctx, nameServer, domainName, newDepth+1)
+			}
 		}
 	}
 
@@ -161,16 +167,17 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer string, domainName
 }
 
 // sendQuery queries a DNS server for a domain and parses the response.
-func (r *Resolver) sendQuery(ctx context.Context, dnsServer string, targetDomain string, recordType RecordType, depth int) (Message, error) {
-	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(dnsServer, "53"))
+func (r *Resolver) sendQuery(ctx context.Context, nameserver string, targetDomain string, recordType RecordType, depth int) (Message, error) {
+	nsAddr := net.JoinHostPort(nameserver, "53")
+	conn, err := r.dialer.DialContext(ctx, "udp", nsAddr)
 	if err != nil {
-		return Message{}, err
+		return Message{}, fmt.Errorf("failed to dial nameserver %q: %w", nsAddr, err)
 	}
 
 	r.logger.Debug(
-		"sending DNS query",
+		"sending DNS query to nameserver",
 		slog.Int("depth", depth),
-		slog.String("dns_server", dnsServer),
+		slog.String("nameserver", nameserver),
 		slog.String("target_domain", targetDomain),
 		slog.String("resource_type", recordType.String()),
 	)
@@ -196,7 +203,7 @@ func (r *Resolver) sendQuery(ctx context.Context, dnsServer string, targetDomain
 			slog.Int("depth", depth),
 			slog.String("err", err.Error()),
 			slog.String("target_domain", targetDomain),
-			slog.String("server", dnsServer),
+			slog.String("server", nameserver),
 			slog.String("resource_type", recordType.String()),
 		)
 		return Message{}, err
@@ -205,10 +212,10 @@ func (r *Resolver) sendQuery(ctx context.Context, dnsServer string, targetDomain
 	return msg, nil
 }
 
-// chooseNameServer chooses an authoritative root name server in round-robin
+// chooseRootNameServer chooses an authoritative root name server in round-robin
 // fashion.
-func (r *Resolver) chooseNameServer() string {
-	idx := r.nameServerIdx.Add(1)
+func (r *Resolver) chooseRootNameServer() string {
+	idx := r.rootNameServerIdx.Add(1)
 	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
 }
 
@@ -230,6 +237,12 @@ func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 	for _, r := range records {
 		if r.Type == RecordTypeA {
 			ips, err := parseIPv4Addrs(r.Data)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, ips...)
+		} else if r.Type == RecordTypeAAAA {
+			ips, err := parseIPv6Addrs(r.Data)
 			if err != nil {
 				return nil, err
 			}
