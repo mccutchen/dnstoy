@@ -83,9 +83,9 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 		return nil, depth, err
 	}
 
-	r.logRecords("answer", msg.Answers, depth)
-	r.logRecords("authority", msg.Authorities, depth)
-	r.logRecords("additional", msg.Additionals, depth)
+	r.logRecords("answer", msg.Answers)
+	r.logRecords("authority", msg.Authorities)
+	r.logRecords("additional", msg.Additionals)
 
 	// if we successfully resolved IP address(es), we're done
 	ips, err := ipAddrsFromRecords(msg.Answers)
@@ -103,11 +103,11 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 		nameServer = randomChoice(glue)
 		r.logger.Debug(
 			"recursively resolving with new name server from glue records",
-			slog.Int("depth", depth),
 			slog.String("query_name", domainName),
 			slog.String("ns_name", nameServer.name),
 			slog.String("ns_addr", nameServer.addr.String()),
 			slog.String("ns_authority", nameServer.authority),
+			slog.Int("depth", depth),
 		)
 		return r.doLookupIP(ctx, nameServer, domainName, depth+1)
 	}
@@ -118,8 +118,8 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 		nsDomain := string(ns.Data)
 		r.logger.Debug(
 			"resolving NS domain",
-			slog.Int("depth", depth),
 			slog.String("ns_domain", nsDomain),
+			slog.Int("depth", depth),
 		)
 		nextNSAddrs, newDepth, err := r.doLookupIP(ctx, r.chooseRootNameServer(), nsDomain, depth+1)
 		if err != nil {
@@ -136,11 +136,11 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 			nameServer = newNameServerDef(nsDomain, string(ns.Name), nsAddr)
 			r.logger.Debug(
 				"recursively resolving with new name server",
-				slog.Int("depth", depth),
 				slog.String("query_domain", domainName),
 				slog.String("ns_name", nameServer.name),
 				slog.String("ns_addr", nameServer.addr.String()),
 				slog.String("ns_authority", nameServer.authority),
+				slog.Int("depth", depth),
 			)
 			return r.doLookupIP(ctx, nameServer, domainName, newDepth+1)
 		}
@@ -152,9 +152,9 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 		cnameDomain := string(cname.Data)
 		r.logger.Debug(
 			"recursively resolving CNAME",
-			slog.Int("depth", depth),
 			slog.String("cname", cnameDomain),
 			slog.String("query_name", domainName),
+			slog.Int("depth", depth),
 		)
 		return r.doLookupIP(ctx, nameServer, cnameDomain, depth+1)
 	}
@@ -176,13 +176,13 @@ func (r *Resolver) sendQuery(ctx context.Context, nameServer nameServerDef, targ
 	}
 
 	r.logger.Debug(
-		"sending DNS query to nameserver",
-		slog.Int("depth", depth),
+		"sending DNS query",
 		slog.String("query_name", targetDomain),
 		slog.String("ns_name", nameServer.name),
 		slog.String("ns_addr", nameServer.addr.String()),
 		slog.String("ns_authority", nameServer.authority),
 		slog.String("resource_type", recordType.String()),
+		slog.Int("depth", depth),
 	)
 
 	query := NewQuery(targetDomain, recordType)
@@ -203,13 +203,13 @@ func (r *Resolver) sendQuery(ctx context.Context, nameServer nameServerDef, targ
 	if err != nil {
 		r.logger.Debug(
 			"failed to parse DNS response",
-			slog.Int("depth", depth),
 			slog.String("err", err.Error()),
 			slog.String("query_name", targetDomain),
 			slog.String("ns_name", nameServer.name),
 			slog.String("ns_addr", nameServer.addr.String()),
 			slog.String("ns_authority", nameServer.authority),
 			slog.String("resource_type", recordType.String()),
+			slog.Int("depth", depth),
 		)
 		return Message{}, err
 	}
@@ -224,7 +224,7 @@ func (r *Resolver) chooseRootNameServer() nameServerDef {
 	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
 }
 
-func (r *Resolver) logRecords(section string, records []Record, depth int) {
+func (r *Resolver) logRecords(section string, records []Record) {
 	for _, a := range records {
 		// try to log human-readable data instead of raw bytes where we know
 		// what to expect for a given record type
@@ -238,7 +238,6 @@ func (r *Resolver) logRecords(section string, records []Record, depth int) {
 
 		r.logger.Debug(
 			"resource record",
-			slog.Int("depth", depth),
 			slog.String("section", section),
 			slog.String("name", string(a.Name)),
 			slog.String("type", a.Type.String()),
