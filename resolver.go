@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net"
-	"sync/atomic"
+	"time"
 
 	"github.com/mccutchen/dnstoy/internal/byteview"
 	"golang.org/x/exp/slog"
@@ -45,17 +45,21 @@ func New(opts *Opts) *Resolver {
 	if opts.Logger == nil {
 		opts.Logger = slog.Default()
 	}
+	if opts.QueryTimeout == 0 {
+		opts.QueryTimeout = 1 * time.Second
+	}
 	return &Resolver{
-		rootNameServers:   opts.RootNameServers,
-		dialer:            opts.Dialer,
-		logger:            opts.Logger,
-		rootNameServerIdx: &atomic.Int32{},
+		rootNameServers: opts.RootNameServers,
+		queryTimeout:    opts.QueryTimeout,
+		dialer:          opts.Dialer,
+		logger:          opts.Logger,
 	}
 }
 
 // Opts defines the options used to configure a Resolver.
 type Opts struct {
 	RootNameServers []nameServerDef
+	QueryTimeout    time.Duration
 	Dialer          *net.Dialer
 	Logger          *slog.Logger
 }
@@ -63,11 +67,9 @@ type Opts struct {
 // Resolver makes DNS queries.
 type Resolver struct {
 	rootNameServers []nameServerDef
+	queryTimeout    time.Duration
 	dialer          *net.Dialer
 	logger          *slog.Logger
-
-	// index into rootNameServers, used for round-robin choice
-	rootNameServerIdx *atomic.Int32
 }
 
 // LookupIP recursively resolves the given domain name, returning the resolved
@@ -167,13 +169,13 @@ func (r *Resolver) doLookupIP(ctx context.Context, nameServer nameServerDef, dom
 	return nil, depth, fmt.Errorf("failed to resolve %s to an IP", domainName)
 }
 
-// sendQuery queries a DNS server for a domain and parses the response.
+// sendQuery sends a query to a name server and parses the response.
 func (r *Resolver) sendQuery(ctx context.Context, nameServer nameServerDef, targetDomain string, recordType RecordType, depth int) (Message, error) {
-	nsAddr := net.JoinHostPort(nameServer.addr.String(), "53")
-	conn, err := r.dialer.DialContext(ctx, "udp", nsAddr)
+	conn, err := r.dialer.DialContext(ctx, "udp", net.JoinHostPort(nameServer.addr.String(), "53"))
 	if err != nil {
-		return Message{}, fmt.Errorf("failed to dial nameserver %q: %w", nsAddr, err)
+		return Message{}, fmt.Errorf("failed to dial nameserver %s: %w", nameServer.name, err)
 	}
+	conn.SetDeadline(time.Now().Add(r.queryTimeout))
 
 	r.logger.Debug(
 		"sending DNS query",
@@ -220,8 +222,7 @@ func (r *Resolver) sendQuery(ctx context.Context, nameServer nameServerDef, targ
 // chooseRootNameServer chooses an authoritative root name server in round-robin
 // fashion.
 func (r *Resolver) chooseRootNameServer() nameServerDef {
-	idx := r.rootNameServerIdx.Add(1)
-	return r.rootNameServers[int(idx)%len(r.rootNameServers)]
+	return randomChoice(r.rootNameServers)
 }
 
 func (r *Resolver) logRecords(section string, records []Record) {
