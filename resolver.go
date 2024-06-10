@@ -222,13 +222,23 @@ func (r *Resolver) chooseRootNameServer() string {
 
 func (r *Resolver) logRecords(section string, records []Record, depth int) {
 	for _, a := range records {
+		// try to log human-readable data instead of raw bytes where we know
+		// what to expect for a given record type
+		val := string(a.Data)
+		if a.Type == RecordTypeA || a.Type == RecordTypeAAAA {
+			ips, err := parseIPAddrs(a.Type, a.Data)
+			if err == nil {
+				val = fmt.Sprintf("%v", ips)
+			}
+		}
+
 		r.logger.Debug(
 			"resource record",
 			slog.Int("depth", depth),
 			slog.String("section", section),
 			slog.String("name", string(a.Name)),
 			slog.String("type", a.Type.String()),
-			slog.String("value", string(a.Data)),
+			slog.String("value", val),
 		)
 	}
 }
@@ -236,14 +246,8 @@ func (r *Resolver) logRecords(section string, records []Record, depth int) {
 func ipAddrsFromRecords(records []Record) ([]net.IP, error) {
 	results := make([]net.IP, 0, len(records))
 	for _, r := range records {
-		if r.Type == RecordTypeA {
-			ips, err := parseIPv4Addrs(r.Data)
-			if err != nil {
-				return nil, err
-			}
-			results = append(results, ips...)
-		} else if r.Type == RecordTypeAAAA {
-			ips, err := parseIPv6Addrs(r.Data)
+		if r.Type == RecordTypeA || r.Type == RecordTypeAAAA {
+			ips, err := parseIPAddrs(r.Type, r.Data)
 			if err != nil {
 				return nil, err
 			}

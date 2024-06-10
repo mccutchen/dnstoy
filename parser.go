@@ -351,26 +351,34 @@ func checkNameCompression(length byte, v *byteview.View) (isCompressed bool, poi
 	return false, 0, nil
 }
 
-// parseIPv4Addrs parses one or more IPv4 net.IP addresses from a slice of bytes.
-func parseIPv4Addrs(ipData []byte) ([]net.IP, error) {
-	if len(ipData)%4 != 0 {
-		return nil, fmt.Errorf("parseIP: invalid IPv4 address data: %q", string(ipData))
+// parseIPAddrs parses one or more net.IP addresses from a slice of bytes,
+// which should encode IPv4 or IPv6 addresses depending on the given record
+// type.
+func parseIPAddrs(recordType RecordType, data []byte) ([]net.IP, error) {
+	var addrSize int
+	switch recordType {
+	case RecordTypeA:
+		addrSize = net.IPv4len
+	case RecordTypeAAAA:
+		addrSize = net.IPv6len
+	default:
+		return nil, fmt.Errorf("parseIPAddrs: unsupported record type: %s (%v)", recordType, recordType)
 	}
-	var results []net.IP
-	for i := 0; i < len(ipData); i += 4 {
-		results = append(results, net.IPv4(ipData[i], ipData[i+1], ipData[i+2], ipData[i+3]))
-	}
-	return results, nil
-}
 
-func parseIPv6Addrs(ipData []byte) ([]net.IP, error) {
-	addrSize := 16
-	if len(ipData)%addrSize != 0 {
-		return nil, fmt.Errorf("parseIP: invalid IPv6 address data: %q (len=%d)", string(ipData), len(ipData))
+	inputSize := len(data)
+	if inputSize%addrSize != 0 {
+		return nil, fmt.Errorf("parseIPAddrs: invalid data for record type %s: %q", recordType, string(data))
 	}
-	var results []net.IP
-	for i := 0; i < len(ipData); i += addrSize {
-		results = append(results, net.IP(ipData[i:i+addrSize]))
+
+	var addr net.IP
+	results := make([]net.IP, 0, inputSize/addrSize)
+	for i := 0; i < len(data); i += addrSize {
+		if recordType == RecordTypeA {
+			addr = net.IPv4(data[i], data[i+1], data[i+2], data[i+3])
+		} else {
+			addr = net.IP(data[i : i+addrSize])
+		}
+		results = append(results, addr)
 	}
 	return results, nil
 }

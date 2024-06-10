@@ -2,6 +2,7 @@ package dnstoy
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"testing"
 
@@ -193,17 +194,20 @@ func TestParseMessage(t *testing.T) {
 	}
 }
 
-func TestParseIPs(t *testing.T) {
+func TestParseIPAddrs(t *testing.T) {
 	testCases := []struct {
-		ipData  []byte
-		want    []net.IP
-		wantErr error
+		recordType RecordType
+		ipData     []byte
+		want       []net.IP
+		wantErr    error
 	}{
 		{
-			ipData: []byte{93, 184, 216, 34},
-			want:   []net.IP{net.IPv4(93, 184, 216, 34)},
+			recordType: RecordTypeA,
+			ipData:     []byte{93, 184, 216, 34},
+			want:       []net.IP{net.IPv4(93, 184, 216, 34)},
 		},
 		{
+			recordType: RecordTypeA,
 			ipData: []byte{
 				93, 184, 216, 34,
 				1, 2, 3, 4,
@@ -217,19 +221,21 @@ func TestParseIPs(t *testing.T) {
 		},
 		{
 			// not enough data
-			ipData:  []byte{1},
-			wantErr: errors.New(`parseIP: invalid IPv4 address data: "\x01"`),
+			recordType: RecordTypeA,
+			ipData:     []byte{1},
+			wantErr:    errors.New(`parseIPAddrs: invalid data for record type A: "\x01"`),
 		},
 		{
 			// not evenly divisible by 4
-			ipData:  []byte{1, 2, 3, 4, 5},
-			wantErr: errors.New(`parseIP: invalid IPv4 address data: "\x01\x02\x03\x04\x05"`),
+			recordType: RecordTypeA,
+			ipData:     []byte{1, 2, 3, 4, 5},
+			wantErr:    errors.New(`parseIPAddrs: invalid data for record type A: "\x01\x02\x03\x04\x05"`),
 		},
 	}
 	for _, tc := range testCases {
 		tc := tc
-		t.Run(string(tc.ipData), func(t *testing.T) {
-			got, err := parseIPv4Addrs(tc.ipData)
+		t.Run(fmt.Sprintf("%v", tc.ipData), func(t *testing.T) {
+			got, err := parseIPAddrs(tc.recordType, tc.ipData)
 			if tc.wantErr != nil {
 				be.Nonzero(t, err)
 				be.Equal(t, tc.wantErr.Error(), err.Error())
