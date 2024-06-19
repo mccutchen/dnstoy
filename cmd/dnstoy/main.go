@@ -16,7 +16,7 @@ import (
 
 func main() {
 	debug := flag.Bool("debug", false, "Enable debug logging")
-	timout := flag.Duration("timeout", 1*time.Second, "Timeout for DNS queries")
+	timeout := flag.Duration("timeout", 5*time.Second, "Timeout for DNS queries")
 	flag.Parse()
 
 	var domains []string
@@ -44,8 +44,9 @@ func main() {
 	resolver := dnstoy.New(&dnstoy.Opts{
 		Logger: logger,
 		Dialer: &net.Dialer{
-			Timeout: *timout,
+			Timeout: *timeout,
 		},
+		QueryTimeout: *timeout,
 	})
 
 	for _, domain := range domains {

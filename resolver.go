@@ -31,6 +31,8 @@ var defaultRootNameServers = []nameServerDef{
 	newNameServerDef("m.root-servers.net", ".", net.ParseIP("202.12.27.33")),   // WIDE Project
 }
 
+const defaultQueryTimeout = 1 * time.Second
+
 // New returns a new Resolver.
 func New(opts *Opts) *Resolver {
 	if opts == nil {
@@ -46,7 +48,7 @@ func New(opts *Opts) *Resolver {
 		opts.Logger = slog.Default()
 	}
 	if opts.QueryTimeout == 0 {
-		opts.QueryTimeout = 1 * time.Second
+		opts.QueryTimeout = defaultQueryTimeout
 	}
 	return &Resolver{
 		rootNameServers: opts.RootNameServers,
